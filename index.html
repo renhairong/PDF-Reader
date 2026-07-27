@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>PDF 阅读器 · 双排看书版</title>
+<link rel="stylesheet" href="./node_modules/pdfjs-dist/web/pdf_viewer.css">
+<style>
+  :root{
+    --bg:#f5f5f7; --bar:#ffffff; --line:#e8e8ed; --ink:#1d1d1f;
+    --sub:#86868b; --brand:#534AB7; --brand2:#4f46e5;
+    --radius:10px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;font-family:-apple-system,"SF Pro Text","PingFang SC","Microsoft YaHei",sans-serif;color:var(--ink);background:var(--bg);-webkit-font-smoothing:antialiased;}
+  #app{display:flex;flex-direction:column;height:100vh;}
+  /* toolbar */
+  #toolbar{
+    display:flex;align-items:center;justify-content:center;gap:4px;
+    padding:10px 20px;background:var(--bar);
+    border-bottom:1px solid var(--line);
+    box-shadow:0 1px 4px rgba(0,0,0,.04);
+    position:relative;z-index:10;
+    flex-wrap:wrap;
+  }
+  #appTitle{
+    position:absolute;left:20px;top:50%;transform:translateY(-50%);
+    font-weight:600;font-size:14px;letter-spacing:.3px;
+    color:var(--sub);user-select:none;pointer-events:none;
+  }
+  #toolbar .grp{
+    display:flex;align-items:center;gap:6px;
+    padding:0 14px;border-right:1px solid var(--line);
+  }
+  #toolbar .grp:last-child{border-right:none;padding-right:0}
+  #toolbar .grp:first-child{padding-left:0}
+  .btn{
+    border:1px solid var(--line);background:#fff;
+    border-radius:var(--radius);padding:7px 14px;
+    font-size:13px;cursor:pointer;color:var(--ink);
+    transition:all .15s ease;
+    user-select:none;white-space:nowrap;
+  }
+  .btn:hover{border-color:var(--brand);color:var(--brand);box-shadow:0 1px 3px rgba(83,74,183,.08)}
+  .btn:active{transform:scale(.96)}
+  .btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+  .title{font-weight:600;font-size:13px;letter-spacing:.3px;color:var(--sub);margin-right:4px;}
+  .seg{
+    display:inline-flex;border:1px solid var(--line);
+    border-radius:var(--radius);overflow:hidden;background:#f5f5f7;
+  }
+  .seg button{
+    border:none;background:transparent;padding:7px 14px;
+    font-size:13px;cursor:pointer;color:var(--sub);
+    transition:all .15s ease;user-select:none;
+    white-space:nowrap;
+  }
+  .seg button:not(:last-child){border-right:1px solid var(--line)}
+  .seg button.active{
+    background:var(--brand);color:#fff;font-weight:500;
+    box-shadow:0 1px 4px rgba(83,74,183,.25);
+  }
+  .zoomval{font-size:13px;color:var(--sub);min-width:44px;text-align:center;font-variant-numeric:tabular-nums;}
+  #pageInfo{font-size:13px;color:var(--sub);min-width:90px;font-variant-numeric:tabular-nums;}
+  #jumpInput{
+    width:50px;font-size:13px;padding:6px 8px;
+    border:1px solid var(--line);border-radius:var(--radius);
+    text-align:center;outline:none;transition:border-color .15s;
+    font-variant-numeric:tabular-nums;
+  }
+  #jumpInput:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(83,74,183,.12)}
+  /* viewer */
+  #viewerContainer{flex:1;overflow:auto;background:var(--bg);position:absolute;top:52px;left:0;right:0;bottom:0;}
+  .pdfViewer{margin:0 auto;padding:24px;}
+  /* empty state */
+  #empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--sub);gap:12px;pointer-events:none;}
+  #empty .big{font-size:16px;color:var(--ink);font-weight:500;}
+  #empty .hint{font-size:13px;color:var(--sub);}
+  #emptyOpen{
+    color:var(--brand);cursor:pointer;
+    border-bottom:1px dashed var(--brand);
+    pointer-events:auto;
+    transition:color .15s, border-color .15s;
+  }
+  #emptyOpen:hover{color:var(--brand2);border-bottom-color:var(--brand2);}
+  /* drop overlay */
+  #dropOverlay{
+    position:fixed;inset:0;
+    background:rgba(83,74,183,.08);
+    border:2.5px dashed var(--brand);
+    display:none;align-items:center;justify-content:center;flex-direction:column;gap:8px;
+    font-size:18px;font-weight:600;color:var(--brand);z-index:80;
+    backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);
+  }
+  #dropOverlay .sub{font-size:13px;font-weight:400;color:var(--sub);}
+  #dropOverlay.show{display:flex;}
+  /* loading */
+  #loading{position:fixed;inset:0;background:rgba(255,255,255,.78);display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index:60;}
+  #loading.show{display:flex;}
+  .spinner{width:32px;height:32px;border:2.5px solid #e5e5ea;border-top-color:var(--brand);border-radius:50%;animation:spin .7s linear infinite;}
+  .spinner-text{font-size:14px;color:var(--sub);}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  /* error */
+  #error{
+    position:fixed;left:50%;top:18px;transform:translateX(-50%);
+    background:#fff;color:#c0392b;
+    border:1px solid #f5c6cb;
+    padding:10px 20px;border-radius:var(--radius);
+    font-size:13px;display:none;z-index:70;max-width:80%;
+    box-shadow:0 4px 12px rgba(0,0,0,.1);
+    text-align:center;
+  }
+  #error.show{display:block;}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="toolbar">
+    <span id="appTitle">PDF 阅读器</span>
+    <!-- 打开文件已移至空态文案 -->
+    <div class="grp">
+      <div class="seg">
+        <button id="modeSingle" class="active">单页</button>
+        <button id="modeTwo">双页</button>
+      </div>
+    </div>
+    <div class="grp">
+      <button class="btn" id="zoomOut" title="缩小">−</button>
+      <span class="zoomval" id="zoomVal">100%</span>
+      <button class="btn" id="zoomIn" title="放大">+</button>
+      <button class="btn" id="zoomFit">适应宽度</button>
+    </div>
+    <div class="grp">
+      <span id="pageInfo">未打开</span>
+      <input id="jumpInput" type="number" min="1" placeholder="页">
+      <button class="btn" id="jumpBtn">跳转</button>
+    </div>
+  </div>
+  <div id="viewerContainer">
+    <div id="viewer" class="pdfViewer"></div>
+    <div id="empty">
+      <div class="big">拖入 PDF 文件，或点击 <span id="emptyOpen">「打开文件」</span></div>
+      <div class="hint">支持本地阅读，文件不会上传服务器</div>
+    </div>
+  </div>
+</div>
+<div id="dropOverlay">
+  <div>松开以打开 PDF</div>
+  <div class="sub">文件仅本地阅读，不会上传</div>
+</div>
+<div id="loading"><div class="spinner"></div><div class="spinner-text">正在加载 PDF…</div></div>
+<div id="error"></div>
+<input type="file" id="fileInput" accept="application/pdf" hidden>
+
+<script>
+// 兜底：任何脚本错误都显示出来，避免再次静默失败（此前 pdf_viewer 解构失败就闷声不响）
+window.addEventListener('error', function(e){
+  var box=document.getElementById('error');
+  if(box){ box.textContent='出错了：'+(e.message||e.filename||'脚本加载失败')+' —— 请确认用 http://localhost:8137 在浏览器新标签页打开'; box.classList.add('show'); }
+});
+</script>
+
+<script type="module">
+// ── 第一步：加载 pdf 核心并挂到全局（pdf_viewer.mjs 的 webpack 包依赖这个全局变量）──
+import * as pdfjsLib from './node_modules/pdfjs-dist/build/pdf.mjs';
+window.pdfjsLib = pdfjsLib;
+pdfjsLib.GlobalWorkerOptions.workerSrc = './node_modules/pdfjs-dist/build/pdf.worker.mjs';
+
+// ── 第二步：动态加载 pdf_viewer（webpack 包，执行后会把 API 挂到 globalThis.pdfjsViewer）──
+await import('./node_modules/pdfjs-dist/web/pdf_viewer.mjs');
+
+// ── 第三步：从全局取 PDFViewer（这是 pdf_viewer.mjs 实际挂载的位置）──
+const PDFViewer = window.pdfjsViewer.PDFViewer;
+if (!PDFViewer) {
+  throw new Error('PDFViewer 未找到 —— pdf_viewer.mjs 加载失败或版本不兼容');
+}
+
+const container = document.getElementById('viewerContainer');
+const viewerEl  = document.getElementById('viewer');
+// v4: PDFViewer 不再自动创建 EventBus，必须显式传入
+const eventBus  = new window.pdfjsViewer.EventBus();
+const pdfViewer = new PDFViewer({ container, viewer: viewerEl, eventBus });
+// SpreadMode/ScrollMode 只在 pdf_viewer.mjs 导出，不在 pdf.mjs 里 —— 必须从全局取
+const { ScrollMode, SpreadMode } = window.pdfjsViewer;
+
+let pdfDoc = null;
+let isTwoPage = false;
+const NARROW = 768;
+
+// ---------- UI ----------
+const modeSingle= document.getElementById('modeSingle');
+const modeTwo   = document.getElementById('modeTwo');
+const zoomIn    = document.getElementById('zoomIn');
+const zoomOut   = document.getElementById('zoomOut');
+const zoomFit   = document.getElementById('zoomFit');
+const zoomVal   = document.getElementById('zoomVal');
+const pageInfo  = document.getElementById('pageInfo');
+const jumpInput = document.getElementById('jumpInput');
+const jumpBtn   = document.getElementById('jumpBtn');
+const fileInput = document.getElementById('fileInput');
+const dropOverlay = document.getElementById('dropOverlay');
+const loading   = document.getElementById('loading');
+const errorBox  = document.getElementById('error');
+const empty     = document.getElementById('empty');
+
+// ---------- helpers ----------
+function showLoading(){ loading.classList.add('show'); }
+function hideLoading(){ loading.classList.remove('show'); }
+function showError(msg){ errorBox.textContent = msg; errorBox.classList.add('show'); setTimeout(()=>errorBox.classList.remove('show'), 4500); }
+function hideEmpty(){ empty.style.display = 'none'; }
+
+function applySpread(){
+  const narrow = window.innerWidth <= NARROW;
+  pdfViewer.spreadMode = (isTwoPage && !narrow)
+    ? SpreadMode.EVEN
+    : SpreadMode.NONE;
+}
+
+function setMode(two){
+  isTwoPage = two;
+  modeSingle.classList.toggle('active', !two);
+  modeTwo.classList.toggle('active', two);
+  applySpread();
+  updatePageInfo();
+}
+
+function updateZoomLabel(){
+  const pct = Math.round((pdfViewer.currentScale || 1) * 100);
+  zoomVal.textContent = pct + '%';
+}
+
+function visiblePageRange(){
+  // 双排：用 pdf.js 自带的 _getVisiblePages() 拿真实可见页号集合（比手算 boundingRect 准）
+  const vis = pdfViewer._getVisiblePages && pdfViewer._getVisiblePages();
+  if(vis && vis.ids && vis.ids.size > 0){
+    const ids = [...vis.ids].sort((a,b)=>a-b);
+    return [ids[0], ids[ids.length-1]];
+  }
+  // 兜底：用 pdf.js 维护的 currentPageNumber
+  const cur = pdfViewer.currentPageNumber || 1;
+  return [cur, cur];
+}
+
+function updatePageInfo(){
+  if(!pdfDoc) return;
+  const total = pdfDoc.numPages;
+  const narrow = window.innerWidth <= NARROW;
+  const two = isTwoPage && !narrow;
+  const [a, b] = visiblePageRange();
+  if(a === null){ pageInfo.textContent = `第 ? / ${total} 页`; return; }
+  if(two && b > a){
+    pageInfo.textContent = `第 ${a}-${b} / ${total} 页`;
+  } else {
+    pageInfo.textContent = `第 ${a} / ${total} 页`;
+  }
+}
+
+// ---------- load ----------
+async function loadFile(file){
+  if(!file) return;
+  const name = (file.name || '').toLowerCase();
+  if(file.type && file.type !== 'application/pdf' && !name.endsWith('.pdf')){
+    showError('请选择 PDF 文件'); return;
+  }
+  showLoading();
+  try{
+    const data = await file.arrayBuffer();
+    if(pdfDoc){ pdfViewer.setDocument(null); }
+    pdfDoc = await pdfjsLib.getDocument({ data }).promise;
+    pdfViewer.setDocument(pdfDoc);
+    pdfViewer.scrollMode = ScrollMode.VERTICAL;
+    pdfViewer.currentScaleValue = 'page-width';
+    applySpread();
+    hideEmpty();
+    hideLoading();
+    updateZoomLabel();
+    updatePageInfo();
+    jumpInput.max = pdfDoc.numPages;
+    jumpInput.placeholder = '页';
+  }catch(err){
+    hideLoading();
+    showError('文件无法打开：' + (err && err.message ? err.message : err));
+  }
+}
+
+// ---------- events ----------
+// 空态「打开文件」点击触发文件选择
+document.getElementById('emptyOpen')?.addEventListener('click', ()=> fileInput.click());
+fileInput.addEventListener('change', e=>{ if(e.target.files[0]) loadFile(e.target.files[0]); fileInput.value=''; });
+
+modeSingle.addEventListener('click', ()=> setMode(false));
+modeTwo.addEventListener('click', ()=> setMode(true));
+
+zoomIn.addEventListener('click', ()=>{ pdfViewer.currentScale = (pdfViewer.currentScale||1) * 1.1; });
+zoomOut.addEventListener('click', ()=>{ pdfViewer.currentScale = Math.max(0.1, (pdfViewer.currentScale||1) / 1.1); });
+zoomFit.addEventListener('click', ()=>{ pdfViewer.currentScaleValue = 'page-width'; });
+
+pdfViewer.eventBus.on('scalechanging', updateZoomLabel);
+pdfViewer.eventBus.on('pagechanging', updatePageInfo);
+pdfViewer.eventBus.on('pagesloaded', updatePageInfo);
+
+let scrollRaf = null;
+container.addEventListener('scroll', ()=>{
+  if(scrollRaf) cancelAnimationFrame(scrollRaf);
+  scrollRaf = requestAnimationFrame(updatePageInfo);
+});
+
+jumpBtn.addEventListener('click', doJump);
+jumpInput.addEventListener('keydown', e=>{ if(e.key==='Enter') doJump(); });
+function doJump(){
+  const n = parseInt(jumpInput.value, 10);
+  if(!pdfDoc || !n || n<1 || n>pdfDoc.numPages) return;
+  pdfViewer.scrollPageIntoView({ pageNumber: n });
+  jumpInput.blur();
+}
+
+window.addEventListener('keydown', e=>{
+  if(e.target.tagName === 'INPUT') return;
+  if(e.key === 'v' || e.key === 'V'){ setMode(!isTwoPage); }
+});
+
+// drag & drop
+let dragDepth = 0;
+function onDragEnter(e){ e.preventDefault(); dragDepth++; dropOverlay.classList.add('show'); }
+function onDragOver(e){
+  e.preventDefault(); e.stopPropagation();
+  if(e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+  dropOverlay.classList.add('show');
+}
+function onDragLeave(e){
+  e.preventDefault();
+  dragDepth = Math.max(0, dragDepth - 1);
+  if(dragDepth === 0) dropOverlay.classList.remove('show');
+}
+function onDrop(e){
+  e.preventDefault(); e.stopPropagation();
+  dragDepth = 0; dropOverlay.classList.remove('show');
+  const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  if(f) loadFile(f);
+}
+window.addEventListener('dragenter', onDragEnter);
+window.addEventListener('dragover', onDragOver);
+window.addEventListener('dragleave', onDragLeave);
+window.addEventListener('drop', onDrop);
+// 文档级双保险：阻止浏览器在拖放时抢去默认打开文件
+document.addEventListener('dragover', e=> e.preventDefault());
+document.addEventListener('drop', e=> e.preventDefault());
+
+window.addEventListener('resize', ()=>{ applySpread(); updatePageInfo(); });
+
+// initial
+applySpread();
+updateZoomLabel();
+</script>
+</body>
+</html>
