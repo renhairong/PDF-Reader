@@ -85,6 +85,54 @@
     transition:color .15s, border-color .15s;
   }
   #emptyOpen:hover{color:var(--brand2);border-bottom-color:var(--brand2);}
+  /* ── 最近打开 ── */
+  #recentFiles{margin-top:28px;width:100%;max-width:460px;text-align:left;}
+  #recentFiles .rf-title{font-size:12px;color:var(--sub);margin-bottom:8px;padding:0 4px;user-select:none;letter-spacing:.3px;}
+  .rf-item{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:7px 12px;margin-bottom:2px;border-radius:6px;
+    cursor:pointer;transition:background .12s;user-select:none;
+    font-size:13px;color:var(--ink);pointer-events:auto;
+  }
+  .rf-item:hover{background:#e8e8ed;}
+  .rf-item .rf-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;}
+  .rf-item .rf-time{font-size:11px;color:var(--sub);flex-shrink:0;margin-left:10px;font-variant-numeric:tabular-nums;}
+  .rf-item:first-child .rf-name{font-weight:500;}
+  /* 悬浮删除按钮 */
+  .rf-item .rf-del{
+    display:none;flex-shrink:0;margin-left:8px;
+    width:20px;height:20px;border-radius:50%;border:none;
+    background:transparent;color:#b0b0b5;cursor:pointer;
+    font-size:12px;line-height:20px;text-align:center;
+    padding:0;transition:background .12s,color .12s;
+  }
+  .rf-item:hover .rf-del{display:block}
+  .rf-item .rf-del:hover{background:#e5e5ea;color:#c0392b}
+  /* 全部清空按钮 */
+  .rf-clear{
+    display:block;margin-top:10px;padding:5px 12px;
+    border:none;background:transparent;
+    font-size:12px;color:var(--sub);cursor:pointer;
+    border-radius:6px;transition:background .12s,color .12s;
+    pointer-events:auto;
+  }
+  .rf-clear:hover{background:#e8e8ed;color:#c0392b}
+  .rf-empty{font-size:12px;color:var(--sub);text-align:center;padding:4px 0;user-select:none;}
+  .dark .rf-item:hover{background:#3a3a40;}
+  .dark .rf-item .rf-del:hover{background:#4a4a50;color:#e55a5a}
+  .dark .rf-clear:hover{background:#3a3a40;color:#e55a5a}
+  /* ── 页脚 ── */
+  #appFooter{
+    position:fixed;left:0;right:0;bottom:0;
+    display:flex;flex-direction:column;align-items:center;gap:2px;
+    padding:8px 18px 12px;
+    font-size:11px;color:var(--sub);
+    pointer-events:none;z-index:5;
+    user-select:none;
+  }
+  #appFooter a{color:var(--sub);text-decoration:none;pointer-events:auto}
+  #appFooter a:hover{color:var(--brand);text-decoration:underline}
+  .dark #appFooter a:hover{color:var(--brand)}
   /* drop overlay */
   #dropOverlay{
     position:fixed;inset:0;
@@ -272,7 +320,7 @@
 <div id="app">
   <div id="fsStrip"></div>
   <div id="toolbar">
-    <span id="appTitle">PDF 阅读器</span>
+    <span id="appTitle">云轩 PDF 阅读器</span>
     <!-- 打开文件已移至空态文案 -->
     <div class="grp">
       <div class="seg">
@@ -333,8 +381,13 @@
     <div id="empty">
       <div class="big">拖入 PDF 文件，或点击 <span id="emptyOpen">「打开文件」</span></div>
       <div class="hint">支持本地阅读，文件不会上传服务器</div>
+      <div id="recentFiles"></div>
     </div>
   </div>
+</div>
+<div id="appFooter">
+  <span>© <span id="footerYear">2026</span> mrleocc · <a href="mailto:mrleocc88@gmail.com">mrleocc88@gmail.com</a></span>
+  <span style="font-size:10px;color:var(--sub);opacity:.55">云轩 PDF 阅读器</span>
 </div>
 <div id="tocPanel"><div class="toc-empty">打开 PDF 后可查看目录</div></div>
 <div id="progBanner">
@@ -421,6 +474,181 @@ const searchClose= document.getElementById('searchClose');
 // 最近打开的 PDF 文件名（用于进度记忆）
 let lastFileName = '';
 let fitWidth = false;
+const recentFilesEl = document.getElementById('recentFiles');
+
+// ── 最近打开 (localStorage 存列表 + IndexedDB 存文件数据) ──
+const RECENT_LIST_KEY = 'pdfRecentList';
+const MAX_RECENT = 5;
+
+function getRecentList(){
+  try {
+    const raw = localStorage.getItem(RECENT_LIST_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch(e){ return []; }
+}
+function saveRecentList(list){
+  try { localStorage.setItem(RECENT_LIST_KEY, JSON.stringify(list)); } catch(e){}
+}
+
+// IndexedDB：存储文件数据（用于重新打开）
+function openDB(){
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('PDFReaderData', 1);
+    req.onupgradeneeded = () => {
+      if(!req.result.objectStoreNames.contains('files')){
+        req.result.createObjectStore('files', { keyPath: 'id' });
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function saveFileData(id, data){
+  try {
+    const db = await openDB();
+    const tx = db.transaction('files', 'readwrite');
+    tx.objectStore('files').put({ id, data });
+    await new Promise(r => { tx.oncomplete = r; });
+    db.close();
+  } catch(e){} // 大文件存不进 IndexedDB 时静默，列表依旧展示
+}
+async function getFileData(id){
+  try {
+    const db = await openDB();
+    return await new Promise((resolve) => {
+      const req = db.transaction('files').objectStore('files').get(id);
+      req.onsuccess = () => { db.close(); resolve(req.result?.data); };
+      req.onerror = () => { db.close(); resolve(null); };
+    });
+  } catch(e){ return null; }
+}
+async function deleteFileData(id){
+  try {
+    const db = await openDB();
+    const tx = db.transaction('files', 'readwrite');
+    tx.objectStore('files').delete(id);
+    await new Promise(r => { tx.oncomplete = r; });
+    db.close();
+  } catch(e){}
+}
+
+function renderRecentFiles(list){
+  if(!recentFilesEl) return;
+  if(!list || list.length === 0){
+    recentFilesEl.innerHTML = '';
+    return;
+  }
+  const now = Date.now();
+  let html = '<div class="rf-title">最近打开</div>';
+  for(const item of list){
+    const diff = now - item.time;
+    let timeStr = '';
+    if(diff < 60000) timeStr = '刚刚';
+    else if(diff < 3600000) timeStr = Math.floor(diff/60000) + ' 分钟前';
+    else if(diff < 86400000) timeStr = Math.floor(diff/3600000) + ' 小时前';
+    else timeStr = Math.floor(diff/86400000) + ' 天前';
+    html += `<div class="rf-item" data-id="${item.id}">
+      <span class="rf-name">${escapeHtml(item.name)}</span>
+      <span class="rf-time">${timeStr}</span>
+      <button class="rf-del" data-id="${item.id}" title="删除">✕</button>
+    </div>`;
+  }
+  html += '<button class="rf-clear" id="clearAllBtn">全部清空</button>';
+  recentFilesEl.innerHTML = html;
+}
+
+function loadRecentFiles(){
+  // 从 localStorage 读列表（轻量可靠），不依赖 IndexedDB
+  const list = getRecentList();
+  // 异步清理已不存在的 IndexedDB 记录
+  scheduleCleanup(list);
+  renderRecentFiles(list);
+}
+function scheduleCleanup(list){
+  // 静默清理：检查 IndexedDB 中是否有已不在列表中的孤立记录
+  setTimeout(async () => {
+    try {
+      const db = await openDB();
+      const keys = await new Promise(resolve => {
+        const req = db.transaction('files').objectStore('files').getAllKeys();
+        req.onsuccess = () => resolve(req.result || []);
+        req.onerror = () => resolve([]);
+      });
+      db.close();
+      const validIds = new Set(list.map(i => i.id));
+      for(const key of keys){
+        if(!validIds.has(key)) await deleteFileData(key);
+      }
+    } catch(e){}
+  }, 2000);
+}
+
+// 保存最近打开记录
+async function saveRecentFile(name, data){
+  const list = getRecentList();
+  // 生成唯一 ID（时间戳 + 短随机）
+  const id = Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+  // 插入到最前面
+  list.unshift({ id, name: name || '未命名.pdf', time: Date.now() });
+  // 截断到 MAX_RECENT 条，多余的删除 IndexedDB 数据
+  const removed = list.splice(MAX_RECENT);
+  saveRecentList(list);
+  // 存文件数据到 IndexedDB（大文件可能失败）
+  await saveFileData(id, data);
+  // 删除超出的 IndexedDB 记录
+  for(const r of removed) await deleteFileData(r.id);
+  // 刷新列表显示
+  renderRecentFiles(list);
+}
+
+// 点击最近文件重新打开 / 删除
+recentFilesEl.addEventListener('click', async (e) => {
+  // ── 单个删除 ──
+  const delBtn = e.target.closest('.rf-del');
+  if(delBtn){
+    e.stopPropagation();
+    const id = delBtn.dataset.id;
+    if(!id) return;
+    const list = getRecentList();
+    const updated = list.filter(i => i.id !== id);
+    if(updated.length === list.length) return; // 没找到
+    saveRecentList(updated);
+    await deleteFileData(id);
+    renderRecentFiles(updated);
+    return;
+  }
+  // ── 全部清空（二次确认） ──
+  if(e.target.id === 'clearAllBtn'){
+    if(!confirm('确定清空所有打开记录？\n此操作无法撤销。')) return;
+    const list = getRecentList();
+    for(const item of list) await deleteFileData(item.id);
+    saveRecentList([]);
+    renderRecentFiles([]);
+    return;
+  }
+  // ── 打开文件 ──
+  const item = e.target.closest('.rf-item');
+  if(!item) return;
+  const id = item.dataset.id;
+  if(!id) return;
+  showLoading();
+  try {
+    const data = await getFileData(id);
+    if(!data){
+      hideLoading();
+      showError('文件数据已丢失，请重新选择文件');
+      return;
+    }
+    const list = getRecentList();
+    const found = list.find(i => i.id === id);
+    const fileName = found ? found.name : 'document.pdf';
+    const file = new File([data], fileName, { type: 'application/pdf' });
+    loadFile(file, { historyId: id });
+  } catch(e){
+    hideLoading();
+    showError('打开失败: ' + e.message);
+  }
+});
 
 // ---------- helpers ----------
 function showLoading(){ loading.classList.add('show'); }
@@ -536,7 +764,7 @@ function dismissProgress(){
 }
 
 // ---------- load ----------
-async function loadFile(file){
+async function loadFile(file, options = {}){
   if(!file) return;
   const name = (file.name || '').toLowerCase();
   if(file.type && file.type !== 'application/pdf' && !name.endsWith('.pdf')){
@@ -544,10 +772,14 @@ async function loadFile(file){
   }
   showLoading();
   try{
-    const data = await file.arrayBuffer();
-    pdfRawData = data;
+    const sourceData = await file.arrayBuffer();
+    // pdf.js 会把传入的 ArrayBuffer 转移给 Worker，原 buffer 会变成 0 字节。
+    // 必须在 getDocument 前复制两份：一份用于打印/历史，一份交给 pdf.js。
+    const historyData = sourceData.slice(0);
+    const pdfData = sourceData.slice(0);
+    pdfRawData = historyData;
     if(pdfDoc){ pdfViewer.setDocument(null); findController.setDocument(null); linkService.setDocument(null); pdfDoc = null; }
-    pdfDoc = await pdfjsLib.getDocument({ data }).promise;
+    pdfDoc = await pdfjsLib.getDocument({ data: pdfData }).promise;
     pdfViewer.setDocument(pdfDoc);
     pdfViewer.scrollMode = ScrollMode.VERTICAL;
     linkService.setDocument(pdfDoc);
@@ -571,6 +803,20 @@ async function loadFile(file){
     lastFileName = file.name || '';
     document.title = file.name || '网页版 PDF 阅读器 · 双页看书版';
     loadOutline();
+    // 保存到最近打开记录（历史记录重开时只更新时间，不重复写文件数据）
+    if(options.historyId){
+      const list = getRecentList();
+      const idx = list.findIndex(i => i.id === options.historyId);
+      if(idx >= 0){
+        const record = list.splice(idx, 1)[0];
+        record.time = Date.now();
+        list.unshift(record);
+        saveRecentList(list);
+        renderRecentFiles(list);
+      }
+    } else {
+      saveRecentFile(file.name || '未命名.pdf', historyData);
+    }
     const prog = checkProgress(lastFileName);
     if(prog && prog.page > 1){
       progPage.textContent = prog.page;
@@ -806,8 +1052,10 @@ document.addEventListener('drop', e=> e.preventDefault());
 window.addEventListener('resize', ()=>{ applySpread(); updatePageInfo(); });
 
 // initial
+document.getElementById('footerYear').textContent = new Date().getFullYear();
 applySpread();
 updateZoomLabel();
+loadRecentFiles();
 </script>
 </body>
 </html>
