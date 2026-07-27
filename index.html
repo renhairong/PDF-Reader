@@ -8,7 +8,7 @@
 <style>
   :root{
     --bg:#f5f5f7; --bar:#ffffff; --line:#e8e8ed; --ink:#1d1d1f;
-    --sub:#86868b; --brand:#534AB7; --brand2:#4f46e5;
+    --sub:#86868b; --brand:#E25D28; --brand2:#CC4410;
     --radius:10px;
   }
   *{box-sizing:border-box}
@@ -41,7 +41,7 @@
     transition:all .15s ease;
     user-select:none;white-space:nowrap;
   }
-  .btn:hover{border-color:var(--brand);color:var(--brand);box-shadow:0 1px 3px rgba(83,74,183,.08)}
+  .btn:hover{border-color:var(--brand);color:var(--brand);box-shadow:0 1px 3px rgba(226,93,40,.08)}
   .btn:active{transform:scale(.96)}
   .btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
   .title{font-weight:600;font-size:13px;letter-spacing:.3px;color:var(--sub);margin-right:4px;}
@@ -58,7 +58,7 @@
   .seg button:not(:last-child){border-right:1px solid var(--line)}
   .seg button.active{
     background:var(--brand);color:#fff;font-weight:500;
-    box-shadow:0 1px 4px rgba(83,74,183,.25);
+    box-shadow:0 1px 4px rgba(226,93,40,.25);
   }
   .zoomval{font-size:13px;color:var(--sub);min-width:44px;text-align:center;font-variant-numeric:tabular-nums;}
   #pageInfo{font-size:13px;color:var(--sub);min-width:90px;font-variant-numeric:tabular-nums;}
@@ -68,7 +68,7 @@
     text-align:center;outline:none;transition:border-color .15s;
     font-variant-numeric:tabular-nums;
   }
-  #jumpInput:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(83,74,183,.12)}
+  #jumpInput:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(226,93,40,.12)}
   /* viewer */
   #viewerContainer{flex:1;overflow:auto;background:var(--bg);position:absolute;top:52px;left:0;right:0;bottom:0;}
   .pdfViewer{margin:0 auto;padding:24px;}
@@ -86,7 +86,7 @@
   /* drop overlay */
   #dropOverlay{
     position:fixed;inset:0;
-    background:rgba(83,74,183,.08);
+    background:rgba(226,93,40,.08);
     border:2.5px dashed var(--brand);
     display:none;align-items:center;justify-content:center;flex-direction:column;gap:8px;
     font-size:18px;font-weight:600;color:var(--brand);z-index:80;
@@ -176,7 +176,13 @@
       <button class="btn" id="jumpBtn">跳转</button>
     </div>
     <div class="grp">
-      <button class="btn" id="tocBtn" title="目录">目录</button>
+      <button class="btn" id="tocBtn" title="目录">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="2" y1="4" x2="14" y2="4"/>
+          <line x1="2" y1="8" x2="14" y2="8"/>
+          <line x1="2" y1="12" x2="14" y2="12"/>
+        </svg>
+      </button>
     </div>
   </div>
   <div id="viewerContainer">
@@ -382,18 +388,25 @@ async function loadFile(file){
   showLoading();
   try{
     const data = await file.arrayBuffer();
-    if(pdfDoc){ pdfViewer.setDocument(null); }
+    if(pdfDoc){ pdfViewer.setDocument(null); pdfDoc = null; }
     pdfDoc = await pdfjsLib.getDocument({ data }).promise;
     pdfViewer.setDocument(pdfDoc);
     pdfViewer.scrollMode = ScrollMode.VERTICAL;
-    pdfViewer.currentScaleValue = 'page-width';
+    jumpInput.max = pdfDoc.numPages;
+    jumpInput.placeholder = '页';
+    // 关键：等 pagesloaded 再设置 scale/spread，否则 _pages 为空时 update() 触发解构 undefined 的 pageView 报错
+    await new Promise(resolve => {
+      const h = () => resolve();
+      pdfViewer.eventBus.on('pagesloaded', h);
+      // 兜底超时 5s（极少数 PDF 没有 outline/pages 事件）
+      setTimeout(()=>{ pdfViewer.eventBus.off('pagesloaded', h); resolve(); }, 5000);
+    });
+    pdfViewer.currentScaleValue = 1;
     applySpread();
     hideEmpty();
     hideLoading();
     updateZoomLabel();
     updatePageInfo();
-    jumpInput.max = pdfDoc.numPages;
-    jumpInput.placeholder = '页';
     // V1.1
     lastFileName = file.name || '';
     loadOutline();
@@ -417,8 +430,18 @@ fileInput.addEventListener('change', e=>{ if(e.target.files[0]) loadFile(e.targe
 modeSingle.addEventListener('click', ()=> setMode(false));
 modeTwo.addEventListener('click', ()=> setMode(true));
 
-zoomIn.addEventListener('click', ()=>{ pdfViewer.currentScale = (pdfViewer.currentScale||1) * 1.1; });
-zoomOut.addEventListener('click', ()=>{ pdfViewer.currentScale = Math.max(0.1, (pdfViewer.currentScale||1) / 1.1); });
+zoomIn.addEventListener('click', ()=>{
+  const cur = pdfViewer.currentScale || 1;
+  const next = cur * 1.1;
+  // 如果跨过 100%，先停到 100%（86% → 95% → 100% → 110%）
+  pdfViewer.currentScale = (cur < 1 && next > 1) ? 1 : next;
+});
+zoomOut.addEventListener('click', ()=>{
+  const cur = pdfViewer.currentScale || 1;
+  const next = cur / 1.1;
+  // 如果跨过 100%，先停到 100%（115% → 105% → 100% → 91%）
+  pdfViewer.currentScale = Math.max(0.1, (cur > 1 && next < 1) ? 1 : next);
+});
 zoomFit.addEventListener('click', ()=>{ pdfViewer.currentScaleValue = 'page-width'; });
 
 pdfViewer.eventBus.on('scalechanging', updateZoomLabel);
