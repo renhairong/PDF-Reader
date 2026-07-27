@@ -246,6 +246,26 @@
     background:rgba(31,136,61,.35) !important;
     border-bottom-color:#2ea043 !important;
   }
+
+  /* ── 打印模式：仅打印 PDF 页面 ── */
+  @media print{
+    @page{margin:0}
+    html,body,#app{height:auto!important;background:#fff!important;overflow:visible!important}
+    #toolbar,#fsStrip,#empty,#tocPanel,#progBanner,#dropOverlay,#loading,#error{display:none!important}
+    #viewerContainer{
+      position:static!important;inset:auto!important;
+      overflow:visible!important;background:#fff!important;
+      height:auto!important;
+    }
+    .pdfViewer{padding:0!important;margin:0!important}
+    .pdfViewer .page{
+      margin:0 auto!important;border:0!important;
+      box-shadow:none!important;break-after:page;page-break-after:always;
+      filter:none!important;
+    }
+    .pdfViewer .page canvas{filter:none!important}
+    .textLayer,.annotationLayer{display:none!important}
+  }
 </style>
 </head>
 <body>
@@ -295,6 +315,11 @@
         <button class="search-nav" id="searchNext" disabled>›</button>
         <button class="search-close" id="searchClose">✕</button>
       </div>
+    </div>
+    <div class="grp">
+      <button class="btn" id="printBtn" title="打印">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5V2h8v3"/><rect x="2" y="5" width="12" height="6" rx="1"/><path d="M4 12v2h8v-2M4 9h8"/></svg>
+      </button>
     </div>
     <div class="grp">
       <button class="btn" id="dmBtn" title="暗色模式">
@@ -359,6 +384,7 @@ const pdfViewer = new PDFViewer({ container, viewer: viewerEl, eventBus, findCon
 linkService.setViewer(pdfViewer);
 
 let pdfDoc = null;
+let pdfRawData = null; // 存储原始数据，用于打印
 let isTwoPage = false;
 const NARROW = 768;
 
@@ -383,6 +409,7 @@ const progBanner= document.getElementById('progBanner');
 const progPage  = document.getElementById('progPage');
 const fsBtn     = document.getElementById('fsBtn');
 const dmBtn     = document.getElementById('dmBtn');
+const printBtn  = document.getElementById('printBtn');
 const searchBtn  = document.getElementById('searchBtn');
 const searchBar  = document.getElementById('searchBar');
 const searchInput= document.getElementById('searchInput');
@@ -518,6 +545,7 @@ async function loadFile(file){
   showLoading();
   try{
     const data = await file.arrayBuffer();
+    pdfRawData = data;
     if(pdfDoc){ pdfViewer.setDocument(null); findController.setDocument(null); linkService.setDocument(null); pdfDoc = null; }
     pdfDoc = await pdfjsLib.getDocument({ data }).promise;
     pdfViewer.setDocument(pdfDoc);
@@ -615,6 +643,28 @@ function toggleDark(force){
 dmBtn.addEventListener('click', ()=> toggleDark());
 // 初始化：读取上次暗色模式偏好
 try { if(localStorage.getItem('pdfDarkMode') === '1') toggleDark(true); } catch(e) {}
+
+// ── 打印 ──
+let printState = null;
+window.addEventListener('beforeprint', ()=>{
+  if(!pdfDoc) return;
+  printState = { twoPage: isTwoPage, scale: pdfViewer.currentScaleValue };
+  // 打印时强制每张纸一页，并使用 100% 原始比例。
+  pdfViewer.spreadMode = SpreadMode.NONE;
+  pdfViewer.currentScaleValue = 1;
+});
+window.addEventListener('afterprint', ()=>{
+  if(!printState) return;
+  pdfViewer.currentScaleValue = printState.scale || 1;
+  isTwoPage = printState.twoPage;
+  applySpread();
+  printState = null;
+});
+printBtn.addEventListener('click', ()=>{
+  if(!pdfDoc){ showError('请先打开 PDF 文件'); return; }
+  // 当前页面直接唤起浏览器/系统打印预览，不打开新窗口。
+  window.print();
+});
 
 // ── 搜索 ──
 function doSearch(){
