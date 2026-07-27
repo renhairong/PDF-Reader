@@ -203,16 +203,14 @@
     </div>
     <div class="grp">
       <button class="btn" id="tocBtn" title="目录">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="2" y1="4" x2="14" y2="4"/>
-          <line x1="2" y1="8" x2="14" y2="8"/>
-          <line x1="2" y1="12" x2="14" y2="12"/>
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+          <path d="M3 4h10M4 8h8M5 12h6"/>
         </svg>
       </button>
     </div>
     <div class="grp">
       <button class="btn" id="fsBtn" title="全屏阅读">
-        <svg class="expand" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M5 3H3v3M11 3h3v3M3 10v3h3M13 10v3h-3"/></svg>
+        <svg class="expand" viewBox="0 0 1024 1024" fill="currentColor" width="16" height="16"><path d="M475.3408 850.5344h-266.24a37.2736 37.2736 0 0 1-37.2736-37.2736v-266.24a37.2736 37.2736 0 1 1 74.5472 0v228.9664h228.9664a37.2736 37.2736 0 0 1 0 74.5472zM830.3104 495.5648a37.2736 37.2736 0 0 1-37.2736-37.2736V229.3248h-228.9664a37.2736 37.2736 0 1 1 0-74.5472h266.24a37.2736 37.2736 0 0 1 37.2736 37.2736v266.24a37.2736 37.2736 0 0 1-37.2736 37.2736z"/></svg>
         <svg class="compress" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>
       </button>
     </div>
@@ -297,6 +295,7 @@ const fsBtn     = document.getElementById('fsBtn');
 
 // 最近打开的 PDF 文件名（用于进度记忆）
 let lastFileName = '';
+let fitWidth = false;
 
 // ---------- helpers ----------
 function showLoading(){ loading.classList.add('show'); }
@@ -465,18 +464,26 @@ modeSingle.addEventListener('click', ()=> setMode(false));
 modeTwo.addEventListener('click', ()=> setMode(true));
 
 zoomIn.addEventListener('click', ()=>{
+  fitWidth = false;
   const cur = pdfViewer.currentScale || 1;
   const next = cur * 1.1;
-  // 如果跨过 100%，先停到 100%（86% → 95% → 100% → 110%）
   pdfViewer.currentScale = (cur < 1 && next > 1) ? 1 : next;
 });
 zoomOut.addEventListener('click', ()=>{
+  fitWidth = false;
   const cur = pdfViewer.currentScale || 1;
   const next = cur / 1.1;
-  // 如果跨过 100%，先停到 100%（115% → 105% → 100% → 91%）
   pdfViewer.currentScale = Math.max(0.1, (cur > 1 && next < 1) ? 1 : next);
 });
-zoomFit.addEventListener('click', ()=>{ pdfViewer.currentScaleValue = 'page-width'; });
+zoomFit.addEventListener('click', ()=>{
+  if(fitWidth){
+    pdfViewer.currentScaleValue = 1;
+    fitWidth = false;
+  } else {
+    pdfViewer.currentScaleValue = 'page-width';
+    fitWidth = true;
+  }
+});
 
 // ── 全屏阅读 ──
 function toggleFullscreen(enter){
@@ -549,6 +556,7 @@ function doJump(){
 window.addEventListener('wheel', e => {
   if (!e.ctrlKey) return;
   e.preventDefault();
+  fitWidth = false;
   const cur = pdfViewer.currentScale || 1;
   pdfViewer.currentScale = e.deltaY < 0 ? cur * 1.1 : Math.max(0.1, cur / 1.1);
 }, { passive: false });
