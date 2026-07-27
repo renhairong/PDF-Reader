@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>PDF 阅读器 · 双排看书版</title>
+<title>网页版 PDF 阅读器 · 双页看书版</title>
 <link rel="stylesheet" href="./node_modules/pdfjs-dist/web/pdf_viewer.css">
 <style>
   :root{
@@ -442,6 +442,7 @@ async function loadFile(file){
     updatePageInfo();
     // V1.1
     lastFileName = file.name || '';
+    document.title = file.name || '网页版 PDF 阅读器 · 双页看书版';
     loadOutline();
     const prog = checkProgress(lastFileName);
     if(prog && prog.page > 1){
