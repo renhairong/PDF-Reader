@@ -654,8 +654,13 @@ searchClose.addEventListener('click', ()=>{
   searchBtn.classList.remove('active');
   searchInput.blur();
 });
-// 监听匹配数变化
+// 监听匹配数变化（初次搜索）
 eventBus.on('updatefindmatchescount', ({ matchesCount }) => {
+  searchCount.textContent = `${matchesCount.current}/${matchesCount.total}`;
+  searchPrev.disabled = searchNext.disabled = matchesCount.total === 0;
+});
+// 监听翻页时计数变化（findagain 后 current 改变）
+eventBus.on('updatefindcontrolstate', ({ matchesCount }) => {
   searchCount.textContent = `${matchesCount.current}/${matchesCount.total}`;
   searchPrev.disabled = searchNext.disabled = matchesCount.total === 0;
 });
