@@ -375,6 +375,9 @@
         <svg class="sun" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="2.5"/><path d="M8 2v2M8 12v2M2 8h2M12 8h2"/></svg>
       </button>
     </div>
+    <button class="btn" id="openFileBtn" title="打开文件" style="position:absolute;right:20px;top:50%;transform:translateY(-50%)">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4v9a1 1 0 001 1h10a1 1 0 001-1V7a1 1 0 00-1-1H8L6 4H3a1 1 0 00-1 1z"/><path d="M2 7h12"/></svg>
+    </button>
   </div>
   <div id="viewerContainer">
     <div id="viewer" class="pdfViewer"></div>
@@ -654,7 +657,11 @@ recentFilesEl.addEventListener('click', async (e) => {
 function showLoading(){ loading.classList.add('show'); }
 function hideLoading(){ loading.classList.remove('show'); }
 function showError(msg){ errorBox.textContent = msg; errorBox.classList.add('show'); setTimeout(()=>errorBox.classList.remove('show'), 4500); }
-function hideEmpty(){ empty.style.display = 'none'; }
+function hideEmpty(){
+  empty.style.display = 'none';
+  const footer = document.getElementById('appFooter');
+  if(footer) footer.style.display = 'none';
+}
 
 function applySpread(){
   const narrow = window.innerWidth <= NARROW;
@@ -832,6 +839,7 @@ async function loadFile(file, options = {}){
 // ---------- events ----------
 // 空态「打开文件」点击触发文件选择
 document.getElementById('emptyOpen')?.addEventListener('click', ()=> fileInput.click());
+document.getElementById('openFileBtn')?.addEventListener('click', ()=> fileInput.click());
 fileInput.addEventListener('change', e=>{ if(e.target.files[0]) loadFile(e.target.files[0]); fileInput.value=''; });
 
 modeSingle.addEventListener('click', ()=> setMode(false));
