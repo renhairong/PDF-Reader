@@ -111,6 +111,46 @@
     text-align:center;
   }
   #error.show{display:block;}
+  /* ── TOC 侧栏 ── */
+  #tocBtn.active{background:var(--brand);color:#fff;border-color:var(--brand)}
+  #tocPanel{
+    position:fixed;top:52px;left:0;bottom:0;width:280px;
+    background:var(--bar);border-right:1px solid var(--line);
+    z-index:20;display:none;overflow-y:auto;
+    box-shadow:2px 0 10px rgba(0,0,0,.06);
+    padding:8px 0;
+  }
+  #tocPanel.show{display:block}
+  .toc-item{
+    padding:7px 16px;cursor:pointer;font-size:13px;color:var(--ink);
+    transition:background .12s;line-height:1.5;
+    display:flex;justify-content:space-between;align-items:center;
+    border-left:3px solid transparent;
+    user-select:none;
+  }
+  .toc-item:hover{background:#f0f0f5;border-left-color:var(--brand);}
+  .toc-item .toc-page{font-size:11px;color:var(--sub);font-variant-numeric:tabular-nums;flex-shrink:0;margin-left:8px;}
+  .toc-empty{padding:32px 24px;text-align:center;color:var(--sub);font-size:13px;line-height:1.6;}
+  .toc-hdr{display:none}
+  /* 侧栏打开时 viewer 左移 */
+  .show-sidebar #viewerContainer{left:280px}
+  /* ── 进度记忆横幅 ── */
+  #progBanner{
+    position:fixed;left:50%;bottom:24px;transform:translateX(-50%);
+    background:var(--bar);border:1px solid var(--line);
+    border-radius:var(--radius);padding:10px 20px;
+    font-size:13px;color:var(--ink);
+    box-shadow:0 4px 16px rgba(0,0,0,.1);
+    display:none;z-index:25;align-items:center;gap:10px;
+    cursor:pointer;transition:all .2s;
+    white-space:nowrap;
+  }
+  #progBanner.show{display:flex}
+  #progBanner:hover{box-shadow:0 6px 20px rgba(0,0,0,.14)}
+  #progBanner .pg-icon{color:var(--brand);font-weight:600}
+  #progBanner .pg-jump{color:var(--brand);text-decoration:underline;font-weight:500}
+  #progBanner .pg-dismiss{color:var(--sub);margin-left:2px;font-size:16px;line-height:1;cursor:pointer;opacity:.5}
+  #progBanner .pg-dismiss:hover{opacity:1}
 </style>
 </head>
 <body>
@@ -135,6 +175,9 @@
       <input id="jumpInput" type="number" min="1" placeholder="页">
       <button class="btn" id="jumpBtn">跳转</button>
     </div>
+    <div class="grp">
+      <button class="btn" id="tocBtn" title="目录">目录</button>
+    </div>
   </div>
   <div id="viewerContainer">
     <div id="viewer" class="pdfViewer"></div>
@@ -143,6 +186,12 @@
       <div class="hint">支持本地阅读，文件不会上传服务器</div>
     </div>
   </div>
+</div>
+<div id="tocPanel"><div class="toc-empty">打开 PDF 后可查看目录</div></div>
+<div id="progBanner">
+  <span class="pg-icon">上次读到</span>
+  <span>第 <b id="progPage">0</b> 页，<span class="pg-jump">跳转</span></span>
+  <span class="pg-dismiss" title="关闭">x</span>
 </div>
 <div id="dropOverlay">
   <div>松开以打开 PDF</div>
@@ -202,6 +251,13 @@ const dropOverlay = document.getElementById('dropOverlay');
 const loading   = document.getElementById('loading');
 const errorBox  = document.getElementById('error');
 const empty     = document.getElementById('empty');
+const tocBtn    = document.getElementById('tocBtn');
+const tocPanel  = document.getElementById('tocPanel');
+const progBanner= document.getElementById('progBanner');
+const progPage  = document.getElementById('progPage');
+
+// 最近打开的 PDF 文件名（用于进度记忆）
+let lastFileName = '';
 
 // ---------- helpers ----------
 function showLoading(){ loading.classList.add('show'); }
@@ -255,6 +311,67 @@ function updatePageInfo(){
   }
 }
 
+// ---------- TOC 目录 ----------
+async function resolveDestToPage(dest){
+  try {
+    if(typeof dest === 'string') dest = await pdfDoc.getDestination(dest);
+    if(Array.isArray(dest) && dest[0]){
+      if(typeof dest[0] === 'number') return dest[0];
+      const idx = await pdfDoc.getPageIndex(dest[0]);
+      return idx + 1;
+    }
+  } catch(e) {}
+  return null;
+}
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]||c}) }
+async function loadOutline(){
+  if(!pdfDoc){ tocPanel.innerHTML='<div class="toc-empty">打开 PDF 后可查看目录</div>'; return; }
+  try {
+    const outline = await pdfDoc.getOutline();
+    if(!outline || outline.length===0){
+      tocPanel.innerHTML='<div class="toc-empty">本 PDF 无目录结构</div>';
+      tocBtn.classList.remove('active'); return;
+    }
+    async function buildTree(items, depth){
+      let html='';
+      for(const item of items){
+        let pn = item.dest ? await resolveDestToPage(item.dest) : null;
+        html+=`<div class="toc-item" style="padding-left:${14+depth*18}px" data-page="${pn||''}">`;
+        html+=`<span>${escapeHtml(item.title)}</span>`;
+        if(pn) html+=`<span class="toc-page">${pn}</span>`;
+        html+=`</div>`;
+        if(item.items&&item.items.length) html+=await buildTree(item.items,depth+1);
+      }
+      return html;
+    }
+    tocPanel.innerHTML = await buildTree(outline,0);
+  } catch(e){
+    tocPanel.innerHTML='<div class="toc-empty">目录加载失败</div>';
+  }
+}
+
+// ---------- 进度记忆 ----------
+const PROGRESS_KEY = 'pdfReaderLastProgress';
+function saveProgress(){
+  if(!pdfDoc||!lastFileName||!pdfViewer.currentPageNumber) return;
+  try {
+    localStorage.setItem(PROGRESS_KEY, JSON.stringify({
+      name: lastFileName, page: pdfViewer.currentPageNumber, time: Date.now()
+    }));
+  } catch(e) {}
+}
+function checkProgress(fileName){
+  try {
+    const d = JSON.parse(localStorage.getItem(PROGRESS_KEY));
+    if(d && d.name===fileName && d.page) return d;
+  } catch(e) {}
+  return null;
+}
+function dismissProgress(){
+  progBanner.classList.remove('show');
+  localStorage.removeItem(PROGRESS_KEY);
+}
+
 // ---------- load ----------
 async function loadFile(file){
   if(!file) return;
@@ -277,6 +394,15 @@ async function loadFile(file){
     updatePageInfo();
     jumpInput.max = pdfDoc.numPages;
     jumpInput.placeholder = '页';
+    // V1.1
+    lastFileName = file.name || '';
+    loadOutline();
+    const prog = checkProgress(lastFileName);
+    if(prog && prog.page){
+      progPage.textContent = prog.page;
+      progBanner.classList.add('show');
+    }
+    if(tocPanel.classList.contains('show')) loadOutline();
   }catch(err){
     hideLoading();
     showError('文件无法打开：' + (err && err.message ? err.message : err));
@@ -297,7 +423,35 @@ zoomFit.addEventListener('click', ()=>{ pdfViewer.currentScaleValue = 'page-widt
 
 pdfViewer.eventBus.on('scalechanging', updateZoomLabel);
 pdfViewer.eventBus.on('pagechanging', updatePageInfo);
+pdfViewer.eventBus.on('pagechanging', saveProgress);
 pdfViewer.eventBus.on('pagesloaded', updatePageInfo);
+
+// ── TOC ──
+tocBtn.addEventListener('click', ()=>{
+  tocPanel.classList.toggle('show');
+  tocBtn.classList.toggle('active');
+  document.getElementById('app').classList.toggle('show-sidebar');
+  if(tocPanel.classList.contains('show') && pdfDoc) loadOutline();
+});
+tocPanel.addEventListener('click', (e)=>{
+  const item = e.target.closest('.toc-item');
+  if(!item) return;
+  const pn = parseInt(item.dataset.page,10);
+  if(pn && pdfDoc){
+    pdfViewer.scrollPageIntoView({ pageNumber: pn });
+    // 缩小窗口点击后自动关闭侧栏
+    if(window.innerWidth<900){ tocBtn.click(); }
+  }
+});
+// ── 进度忘忆 ──
+progBanner.addEventListener('click', (e)=>{
+  if(e.target.classList.contains('pg-dismiss')){ dismissProgress(); return; }
+  const saved = checkProgress(lastFileName);
+  if(saved && saved.page && pdfDoc){
+    pdfViewer.scrollPageIntoView({ pageNumber: saved.page });
+    dismissProgress();
+  }
+});
 
 let scrollRaf = null;
 container.addEventListener('scroll', ()=>{
