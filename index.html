@@ -302,7 +302,7 @@ function hideEmpty(){ empty.style.display = 'none'; }
 function applySpread(){
   const narrow = window.innerWidth <= NARROW;
   pdfViewer.spreadMode = (isTwoPage && !narrow)
-    ? SpreadMode.EVEN
+    ? SpreadMode.ODD
     : SpreadMode.NONE;
 }
 
