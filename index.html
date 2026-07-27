@@ -199,11 +199,53 @@
   .dark #dropOverlay{background:rgba(31,136,61,.15)}
   .dark .page-nav{background:var(--bar);border-color:var(--line);color:var(--ink)}
   .dark .page-nav:hover{background:var(--brand);color:#fff;border-color:var(--brand)}
-  /* pdf 页面底色反转 */
-  .dark .pdfViewer .page{background:#2c2c30 !important;filter:invert(.92) hue-rotate(180deg)}
-  .dark .pdfViewer .textLayer{color:#ccc !important;filter:invert(1) hue-rotate(180deg)}
-  /* 暗色进度条底色 */
-  .dark .loadingIcon{background:#2c2c30}
+  /* pdf 页面底色反转（只反画布，不反文字层和高亮） */
+  .dark .pdfViewer .page{background:#2c2c30 !important}
+  .dark .pdfViewer .page canvas{filter:invert(.92) hue-rotate(180deg)}
+  .dark .pdfViewer .textLayer{filter:none !important;color:#d4d4d4}
+  /* ── 搜索框 ── */
+  #searchBtn.active{background:var(--brand);color:#fff;border-color:var(--brand)}
+  .search-bar{
+    display:none;align-items:center;gap:6px;
+    padding:6px 14px;
+  }
+  .search-bar.show{display:flex}
+  #searchInput{
+    width:160px;font-size:13px;padding:5px 8px;
+    border:1px solid var(--line);border-radius:6px;
+    outline:none;background:#fff;color:var(--ink);
+    transition:border-color .15s;
+  }
+  #searchInput:focus{border-color:var(--brand);box-shadow:0 0 0 2px rgba(31,136,61,.12)}
+  #searchCount{font-size:12px;color:var(--sub);min-width:40px;text-align:center;font-variant-numeric:tabular-nums;}
+  .search-nav{background:none;border:1px solid var(--line);border-radius:6px;padding:0 8px;height:26px;cursor:pointer;color:var(--sub);font-size:14px;display:flex;align-items:center;transition:.15s;}
+  .search-nav:hover{border-color:var(--brand);color:var(--brand)}
+  .search-nav:disabled{opacity:.3;cursor:default}
+  .search-close{background:none;border:none;padding:0 4px;cursor:pointer;color:var(--sub);font-size:16px;line-height:1;}
+  .search-close:hover{color:var(--ink)}
+  .dark #searchInput{background:#2c2c30;border-color:var(--line);color:var(--ink)}
+  .dark .search-nav{color:var(--sub);border-color:var(--line)}
+  .dark .search-nav:hover{color:var(--brand);border-color:var(--brand)}
+  .dark .search-close:hover{color:var(--ink)}
+  /* 搜索高亮（品牌绿，不盖文字） */
+  .textLayer .highlight{
+    background:rgba(31,136,61,.12) !important;
+    border-bottom:2px solid rgba(31,136,61,.35) !important;
+    border-radius:1px;
+  }
+  .textLayer .highlight.selected{
+    background:rgba(31,136,61,.25) !important;
+    border-bottom:2px solid #1f883d !important;
+  }
+  /* 暗色模式高亮 */
+  .dark .textLayer .highlight{
+    background:rgba(31,136,61,.18) !important;
+    border-bottom-color:rgba(31,136,61,.5) !important;
+  }
+  .dark .textLayer .highlight.selected{
+    background:rgba(31,136,61,.35) !important;
+    border-bottom-color:#2ea043 !important;
+  }
 </style>
 </head>
 <body>
@@ -241,6 +283,18 @@
         <svg class="expand" viewBox="0 0 1024 1024" fill="currentColor" width="16" height="16"><path d="M475.3408 850.5344h-266.24a37.2736 37.2736 0 0 1-37.2736-37.2736v-266.24a37.2736 37.2736 0 1 1 74.5472 0v228.9664h228.9664a37.2736 37.2736 0 0 1 0 74.5472zM830.3104 495.5648a37.2736 37.2736 0 0 1-37.2736-37.2736V229.3248h-228.9664a37.2736 37.2736 0 1 1 0-74.5472h266.24a37.2736 37.2736 0 0 1 37.2736 37.2736v266.24a37.2736 37.2736 0 0 1-37.2736 37.2736z"/></svg>
         <svg class="compress" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>
       </button>
+    </div>
+    <div class="grp">
+      <button class="btn" id="searchBtn" title="搜索">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg>
+      </button>
+      <div class="search-bar" id="searchBar">
+        <input id="searchInput" type="text" placeholder="搜索">
+        <span id="searchCount">0/0</span>
+        <button class="search-nav" id="searchPrev" disabled>‹</button>
+        <button class="search-nav" id="searchNext" disabled>›</button>
+        <button class="search-close" id="searchClose">✕</button>
+      </div>
     </div>
     <div class="grp">
       <button class="btn" id="dmBtn" title="暗色模式">
@@ -298,9 +352,11 @@ const container = document.getElementById('viewerContainer');
 const viewerEl  = document.getElementById('viewer');
 // v4: PDFViewer 不再自动创建 EventBus，必须显式传入
 const eventBus  = new window.pdfjsViewer.EventBus();
-const pdfViewer = new PDFViewer({ container, viewer: viewerEl, eventBus });
-// SpreadMode/ScrollMode 只在 pdf_viewer.mjs 导出，不在 pdf.mjs 里 —— 必须从全局取
-const { ScrollMode, SpreadMode } = window.pdfjsViewer;
+const { ScrollMode, SpreadMode, PDFLinkService, PDFFindController } = window.pdfjsViewer;
+const linkService = new PDFLinkService({ eventBus });
+const findController = new PDFFindController({ linkService, eventBus });
+const pdfViewer = new PDFViewer({ container, viewer: viewerEl, eventBus, findController, linkService });
+linkService.setViewer(pdfViewer);
 
 let pdfDoc = null;
 let isTwoPage = false;
@@ -327,6 +383,13 @@ const progBanner= document.getElementById('progBanner');
 const progPage  = document.getElementById('progPage');
 const fsBtn     = document.getElementById('fsBtn');
 const dmBtn     = document.getElementById('dmBtn');
+const searchBtn  = document.getElementById('searchBtn');
+const searchBar  = document.getElementById('searchBar');
+const searchInput= document.getElementById('searchInput');
+const searchCount= document.getElementById('searchCount');
+const searchPrev = document.getElementById('searchPrev');
+const searchNext = document.getElementById('searchNext');
+const searchClose= document.getElementById('searchClose');
 
 // 最近打开的 PDF 文件名（用于进度记忆）
 let lastFileName = '';
@@ -455,10 +518,12 @@ async function loadFile(file){
   showLoading();
   try{
     const data = await file.arrayBuffer();
-    if(pdfDoc){ pdfViewer.setDocument(null); pdfDoc = null; }
+    if(pdfDoc){ pdfViewer.setDocument(null); findController.setDocument(null); linkService.setDocument(null); pdfDoc = null; }
     pdfDoc = await pdfjsLib.getDocument({ data }).promise;
     pdfViewer.setDocument(pdfDoc);
     pdfViewer.scrollMode = ScrollMode.VERTICAL;
+    linkService.setDocument(pdfDoc);
+    findController.setDocument(pdfDoc);
     jumpInput.max = pdfDoc.numPages;
     jumpInput.placeholder = '页';
     // 关键：等 pagesloaded 再设置 scale/spread，否则 _pages 为空时 update() 触发解构 undefined 的 pageView 报错
@@ -550,6 +615,50 @@ function toggleDark(force){
 dmBtn.addEventListener('click', ()=> toggleDark());
 // 初始化：读取上次暗色模式偏好
 try { if(localStorage.getItem('pdfDarkMode') === '1') toggleDark(true); } catch(e) {}
+
+// ── 搜索 ──
+function doSearch(){
+  const q = searchInput.value.trim();
+  if(!q || !pdfDoc){ searchCount.textContent = '0/0'; searchPrev.disabled = searchNext.disabled = true; return; }
+  eventBus.dispatch('find', { type: '', query: q, caseSensitive: false, findPrevious: false, highlightAll: true });
+}
+function findAgain(prev){
+  const q = searchInput.value.trim();
+  if(!q || !pdfDoc) return;
+  eventBus.dispatch('find', { type: 'again', query: q, caseSensitive: false, findPrevious: prev, highlightAll: true });
+}
+function clearSearch(){
+  eventBus.dispatch('findbarclose', true);
+  searchCount.textContent = '0/0';
+  searchPrev.disabled = searchNext.disabled = true;
+}
+searchBtn.addEventListener('click', ()=>{
+  const open = !searchBar.classList.contains('show');
+  searchBar.classList.toggle('show', open);
+  searchBtn.classList.toggle('active', open);
+  if(open) searchInput.focus();
+  else { searchInput.value = ''; clearSearch(); }
+});
+searchInput.addEventListener('input', doSearch);
+searchInput.addEventListener('keydown', e=>{
+  if(e.key === 'Enter' && searchInput.value.trim()){
+    findAgain(e.shiftKey);
+  }
+});
+searchPrev.addEventListener('click', ()=> findAgain(true));
+searchNext.addEventListener('click', ()=> findAgain(false));
+searchClose.addEventListener('click', ()=>{
+  searchInput.value = '';
+  clearSearch();
+  searchBar.classList.remove('show');
+  searchBtn.classList.remove('active');
+  searchInput.blur();
+});
+// 监听匹配数变化
+eventBus.on('updatefindmatchescount', ({ matchesCount }) => {
+  searchCount.textContent = `${matchesCount.current}/${matchesCount.total}`;
+  searchPrev.disabled = searchNext.disabled = matchesCount.total === 0;
+});
 
 pdfViewer.eventBus.on('scalechanging', updateZoomLabel);
 pdfViewer.eventBus.on('pagechanging', updatePageInfo);
