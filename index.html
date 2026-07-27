@@ -18,11 +18,11 @@
   #toolbar{
     display:flex;align-items:center;justify-content:center;gap:4px;
     padding:10px 20px;
-    background:rgba(255,255,255,.58);
-    border-bottom:1px solid rgba(232,232,237,.4);
+    background:rgba(255,255,255,.48);
+    border-bottom:1px solid rgba(232,232,237,.3);
     box-shadow:0 1px 4px rgba(0,0,0,.04);
-    backdrop-filter:saturate(150%) blur(30px);
-    -webkit-backdrop-filter:saturate(150%) blur(30px);
+    backdrop-filter:saturate(150%) blur(24px);
+    -webkit-backdrop-filter:saturate(150%) blur(24px);
     position:relative;z-index:10;
     flex-wrap:wrap;
   }
@@ -39,10 +39,11 @@
   #toolbar .grp:first-child{padding-left:0}
   .btn{
     border:1px solid var(--line);background:#fff;
-    border-radius:var(--radius);padding:7px 14px;
+    border-radius:var(--radius);padding:0 14px;
     font-size:13px;cursor:pointer;color:var(--ink);
     transition:all .15s ease;
     user-select:none;white-space:nowrap;
+    height:32px;display:inline-flex;align-items:center;justify-content:center;
   }
   .btn:hover{border-color:var(--brand);color:var(--brand);box-shadow:0 1px 3px rgba(31,136,61,.08)}
   .btn:active{transform:scale(.96)}
@@ -53,10 +54,11 @@
     border-radius:var(--radius);overflow:hidden;background:#fff;
   }
   .seg button{
-    border:none;background:transparent;padding:7px 14px;
+    border:none;background:transparent;padding:0 14px;
     font-size:13px;cursor:pointer;color:var(--sub);
     transition:color .15s;user-select:none;
     white-space:nowrap;
+    height:32px;display:inline-flex;align-items:center;justify-content:center;
   }
   .seg button:not(:last-child){border-right:1px solid var(--line)}
   .seg button.active{color:var(--brand);font-weight:500}
