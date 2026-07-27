@@ -18,11 +18,11 @@
   #toolbar{
     display:flex;align-items:center;justify-content:center;gap:4px;
     padding:10px 20px;
-    background:rgba(255,255,255,.72);
-    border-bottom:1px solid rgba(232,232,237,.6);
+    background:rgba(255,255,255,.58);
+    border-bottom:1px solid rgba(232,232,237,.4);
     box-shadow:0 1px 4px rgba(0,0,0,.04);
-    backdrop-filter:saturate(180%) blur(20px);
-    -webkit-backdrop-filter:saturate(180%) blur(20px);
+    backdrop-filter:saturate(150%) blur(30px);
+    -webkit-backdrop-filter:saturate(150%) blur(30px);
     position:relative;z-index:10;
     flex-wrap:wrap;
   }
@@ -157,10 +157,30 @@
   #progBanner .pg-jump{color:var(--brand);text-decoration:underline;font-weight:500}
   #progBanner .pg-dismiss{color:var(--sub);margin-left:2px;font-size:16px;line-height:1;cursor:pointer;opacity:.5}
   #progBanner .pg-dismiss:hover{opacity:1}
+  /* ── 全屏阅读 ── */
+  #fsBtn{display:flex;align-items:center}
+  #fsBtn svg{width:16px;height:16px}
+  /* 悬停触发条：全屏时顶部的透明热区 */
+  #fsStrip{display:none;position:fixed;top:0;left:0;right:0;height:40px;z-index:9}
+  .fullscreen #fsStrip{display:block}
+  .fullscreen #toolbar{
+    transform:translateY(-100%);opacity:0;pointer-events:none;
+    transition:transform .28s cubic-bezier(.25,0,.3,1),opacity .28s;
+  }
+  .fullscreen #viewerContainer{top:0!important}
+  /* strip hover + toolbar self-hover 都显示 */
+  .fullscreen #fsStrip:hover ~ #toolbar,
+  .fullscreen #toolbar:hover{
+    transform:translateY(0);opacity:1;pointer-events:auto;
+  }
+  #fsBtn svg.compress{display:none}
+  .fullscreen #fsBtn svg.expand{display:none}
+  .fullscreen #fsBtn svg.compress{display:block}
 </style>
 </head>
 <body>
 <div id="app">
+  <div id="fsStrip"></div>
   <div id="toolbar">
     <span id="appTitle">PDF 阅读器</span>
     <!-- 打开文件已移至空态文案 -->
@@ -188,6 +208,12 @@
           <line x1="2" y1="8" x2="14" y2="8"/>
           <line x1="2" y1="12" x2="14" y2="12"/>
         </svg>
+      </button>
+    </div>
+    <div class="grp">
+      <button class="btn" id="fsBtn" title="全屏阅读">
+        <svg class="expand" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M5 3H3v3M11 3h3v3M3 10v3h3M13 10v3h-3"/></svg>
+        <svg class="compress" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>
       </button>
     </div>
   </div>
@@ -267,6 +293,7 @@ const tocBtn    = document.getElementById('tocBtn');
 const tocPanel  = document.getElementById('tocPanel');
 const progBanner= document.getElementById('progBanner');
 const progPage  = document.getElementById('progPage');
+const fsBtn     = document.getElementById('fsBtn');
 
 // 最近打开的 PDF 文件名（用于进度记忆）
 let lastFileName = '';
@@ -449,6 +476,26 @@ zoomOut.addEventListener('click', ()=>{
   pdfViewer.currentScale = Math.max(0.1, (cur > 1 && next < 1) ? 1 : next);
 });
 zoomFit.addEventListener('click', ()=>{ pdfViewer.currentScaleValue = 'page-width'; });
+
+// ── 全屏阅读 ──
+function toggleFullscreen(enter){
+  const app = document.getElementById('app');
+  const goingFull = enter !== undefined ? enter : !app.classList.contains('fullscreen');
+  if(goingFull){
+    try { document.documentElement.requestFullscreen(); } catch(e) {}
+  } else {
+    if(document.fullscreenElement) document.exitFullscreen();
+  }
+  app.classList.toggle('fullscreen', goingFull);
+  fsBtn.title = goingFull ? '退出全屏' : '全屏阅读';
+}
+fsBtn.addEventListener('click', ()=>{ toggleFullscreen(); });
+// 监听浏览器退出全屏（如按 Esc），同步 UI 状态
+document.addEventListener('fullscreenchange', ()=>{
+  const isFS = !!document.fullscreenElement;
+  document.getElementById('app').classList.toggle('fullscreen', isFS);
+  fsBtn.title = isFS ? '退出全屏' : '全屏阅读';
+});
 
 pdfViewer.eventBus.on('scalechanging', updateZoomLabel);
 pdfViewer.eventBus.on('pagechanging', updatePageInfo);
