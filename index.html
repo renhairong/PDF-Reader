@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>网页版 PDF 阅读器 · 双页看书版</title>
+<title>云轩 PDF 阅读器 · 网页版</title>
 <link rel="stylesheet" href="./node_modules/pdfjs-dist/web/pdf_viewer.css">
 <style>
   :root{
@@ -233,6 +233,7 @@
   .dark .btn:hover{border-color:var(--brand);color:var(--brand)}
   .dark .seg{background:#2c2c30;border-color:var(--line)}
   .dark .seg button{color:var(--sub)}
+  .dark .seg button.active{color:var(--ink);font-weight:500}
   .dark .seg button:not(:last-child){border-color:var(--line)}
   .dark #jumpInput{background:#2c2c30;border-color:var(--line);color:var(--ink)}
   .dark #empty .big{color:var(--ink)}
@@ -376,8 +377,8 @@
     </div>
     <div class="grp">
       <button class="btn" id="dmBtn" title="暗色模式">
-        <svg class="moon" viewBox="0 0 1024 1024" fill="currentColor" width="16" height="16"><path d="M548.352 947.996444a436.679111 436.679111 0 0 0 358.4-187.733333 29.127111 29.127111 0 0 0 1.649778-30.549333 27.932444 27.932444 0 0 0-26.510222-15.189334l-6.997334 0.341334h-6.542222a377.799111 377.799111 0 0 1-310.556444-593.351111 29.127111 29.127111 0 0 0 1.649777-30.549334 28.444444 28.444444 0 0 0-26.510222-15.189333 436.110222 436.110222 0 0 0 15.530667 871.879111z m274.716444-176.753777A377.856 377.856 0 1 1 479.004444 140.515556a436.110222 436.110222 0 0 0 344.064 630.727111z"/></svg>
-        <svg class="sun" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="2.5"/><path d="M8 2v2M8 12v2M2 8h2M12 8h2"/></svg>
+        <svg class="moon" viewBox="0 0 1024 1024" fill="currentColor" width="16" height="16"><path d="M358.4 162.133333C221.866667 221.866667 128 358.4 128 512c0 213.333333 170.666667 384 384 384 153.6 0 290.133333-93.866667 349.866667-230.4-136.533333 25.6-281.6-8.533333-384-102.4-110.933333-110.933333-145.066667-256-119.466667-401.066667zM384 59.733333c42.666667-8.533333 76.8 34.133333 59.733333 85.333334-34.133333 128-8.533333 264.533333 85.333334 358.4 93.866667 85.333333 221.866667 110.933333 349.866666 76.8 42.666667-8.533333 93.866667 17.066667 76.8 68.266666-51.2 196.266667-238.933333 341.333333-452.266666 341.333334C256 981.333333 42.666667 768 42.666667 512c0-213.333333 145.066667-392.533333 341.333333-452.266667z"/></svg>
+        <svg class="sun" viewBox="0 0 1024 1024" fill="currentColor" width="16" height="16"><path d="M512 819.2a38.4 38.4 0 0 1 38.4 38.4v76.8a38.4 38.4 0 0 1-76.8 0v-76.8A38.4 38.4 0 0 1 512 819.2z m271.5136-89.9584l54.272 54.272a38.4 38.4 0 0 1-54.272 54.272l-54.272-54.272a38.4 38.4 0 0 1 54.272-54.272z m-488.7552 0a38.4 38.4 0 0 1 0 54.272l-54.272 54.272a38.4 38.4 0 1 1-54.272-54.272l54.272-54.272a38.4 38.4 0 0 1 54.3232 0zM512 281.6a230.4 230.4 0 1 1 0 460.8 230.4 230.4 0 0 1 0-460.8zM512 358.4a153.088 153.088 0 0 0-108.5952 45.0048A153.088 153.088 0 0 0 358.4 512c0 42.4448 17.2032 80.8448 45.0048 108.5952A153.088 153.088 0 0 0 512 665.6a153.088 153.088 0 0 0 108.5952-45.0048A153.088 153.088 0 0 0 665.6 512a153.088 153.088 0 0 0-45.0048-108.5952A153.088 153.088 0 0 0 512 358.4z m422.4 115.2a38.4 38.4 0 0 1 0 76.8h-76.8a38.4 38.4 0 0 1 0-76.8h76.8z m-768 0a38.4 38.4 0 1 1 0 76.8h-76.8a38.4 38.4 0 0 1 0-76.8h76.8z m671.4368-287.4368a38.4 38.4 0 0 1 0 54.272l-54.272 54.3232a38.4 38.4 0 0 1-54.3232-54.272l54.272-54.272a38.4 38.4 0 0 1 54.272 0z m-597.3504 0l54.272 54.272a38.4 38.4 0 0 1-54.272 54.3232l-54.272-54.272a38.4 38.4 0 1 1 54.272-54.272zM512 51.2a38.4 38.4 0 0 1 38.4 38.4v76.8a38.4 38.4 0 0 1-76.8 0v-76.8A38.4 38.4 0 0 1 512 51.2z"/></svg>
       </button>
     </div>
     <button class="btn" id="openFileBtn" title="打开文件" style="position:absolute;right:20px;top:50%;transform:translateY(-50%)">
@@ -813,7 +814,7 @@ async function loadFile(file, options = {}){
     updatePageInfo();
     // V1.1
     lastFileName = file.name || '';
-    document.title = file.name || '网页版 PDF 阅读器 · 双页看书版';
+    document.title = file.name || '云轩 PDF 阅读器 · 网页版';
     loadOutline();
     // 保存到最近打开记录（历史记录重开时只更新时间，不重复写文件数据）
     if(options.historyId){
@@ -861,7 +862,7 @@ function goHome(){
   pdfDoc = null;
   pdfRawData = null;
   lastFileName = '';
-  document.title = '网页版 PDF 阅读器 · 双页看书版';
+  document.title = '云轩 PDF 阅读器 · 网页版';
   empty.style.display = '';
   const footer = document.getElementById('appFooter');
   if(footer) footer.style.display = '';
