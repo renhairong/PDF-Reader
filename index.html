@@ -17,9 +17,12 @@
   /* toolbar */
   #toolbar{
     display:flex;align-items:center;justify-content:center;gap:4px;
-    padding:10px 20px;background:var(--bar);
-    border-bottom:1px solid var(--line);
+    padding:10px 20px;
+    background:rgba(255,255,255,.72);
+    border-bottom:1px solid rgba(232,232,237,.6);
     box-shadow:0 1px 4px rgba(0,0,0,.04);
+    backdrop-filter:saturate(180%) blur(20px);
+    -webkit-backdrop-filter:saturate(180%) blur(20px);
     position:relative;z-index:10;
     flex-wrap:wrap;
   }
