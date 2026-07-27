@@ -199,9 +199,9 @@
   .dark #dropOverlay{background:rgba(31,136,61,.15)}
   .dark .page-nav{background:var(--bar);border-color:var(--line);color:var(--ink)}
   .dark .page-nav:hover{background:var(--brand);color:#fff;border-color:var(--brand)}
-  /* pdf 页面底色反转（只反画布，不反文字层和高亮） */
+  /* pdf 页面底色只压暗、不反相（保留图片原色） */
   .dark .pdfViewer .page{background:#2c2c30 !important}
-  .dark .pdfViewer .page canvas{filter:invert(.92) hue-rotate(180deg)}
+  .dark .pdfViewer .page canvas{filter:brightness(.55) saturate(.9)}
   .dark .pdfViewer .textLayer{filter:none !important;color:#d4d4d4}
   /* ── 搜索框 ── */
   #searchBtn.active{background:var(--brand);color:#fff;border-color:var(--brand)}
