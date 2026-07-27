@@ -172,6 +172,38 @@
   #fsBtn svg.compress{display:none}
   .fullscreen #fsBtn svg.expand{display:none}
   .fullscreen #fsBtn svg.compress{display:block}
+  /* ── 暗色模式 ── */
+  #dmBtn svg.sun{display:none}
+  .dark #dmBtn svg.moon{display:none}
+  .dark #dmBtn svg.sun{display:block}
+  .dark{
+    --bg:#1c1c1e; --bar:#2c2c30; --line:#3a3a40; --ink:#e5e5e7;
+    --sub:#8e8e93;
+  }
+  .dark #toolbar{background:rgba(44,44,48,.72)}
+  .dark .btn{background:#2c2c30;border-color:var(--line);color:var(--ink)}
+  .dark .btn:hover{border-color:var(--brand);color:var(--brand)}
+  .dark .seg{background:#2c2c30;border-color:var(--line)}
+  .dark .seg button{color:var(--sub)}
+  .dark .seg button:not(:last-child){border-color:var(--line)}
+  .dark #jumpInput{background:#2c2c30;border-color:var(--line);color:var(--ink)}
+  .dark #empty .big{color:var(--ink)}
+  .dark #loading{background:rgba(0,0,0,.72)}
+  .dark .spinner{border-color:#3a3a40;border-top-color:var(--brand)}
+  .dark #error{background:#1e2a1e;color:#6fcf6f;border-color:#2d4a2d}
+  .dark #tocPanel{background:var(--bar);border-color:var(--line)}
+  .dark .toc-item{color:var(--ink)}
+  .dark .toc-item:hover{background:#3a3a40}
+  .dark .toc-empty{color:var(--sub)}
+  .dark #progBanner{background:var(--bar);border-color:var(--line);color:var(--ink)}
+  .dark #dropOverlay{background:rgba(31,136,61,.15)}
+  .dark .page-nav{background:var(--bar);border-color:var(--line);color:var(--ink)}
+  .dark .page-nav:hover{background:var(--brand);color:#fff;border-color:var(--brand)}
+  /* pdf 页面底色反转 */
+  .dark .pdfViewer .page{background:#2c2c30 !important;filter:invert(.92) hue-rotate(180deg)}
+  .dark .pdfViewer .textLayer{color:#ccc !important;filter:invert(1) hue-rotate(180deg)}
+  /* 暗色进度条底色 */
+  .dark .loadingIcon{background:#2c2c30}
 </style>
 </head>
 <body>
@@ -208,6 +240,12 @@
       <button class="btn" id="fsBtn" title="全屏阅读">
         <svg class="expand" viewBox="0 0 1024 1024" fill="currentColor" width="16" height="16"><path d="M475.3408 850.5344h-266.24a37.2736 37.2736 0 0 1-37.2736-37.2736v-266.24a37.2736 37.2736 0 1 1 74.5472 0v228.9664h228.9664a37.2736 37.2736 0 0 1 0 74.5472zM830.3104 495.5648a37.2736 37.2736 0 0 1-37.2736-37.2736V229.3248h-228.9664a37.2736 37.2736 0 1 1 0-74.5472h266.24a37.2736 37.2736 0 0 1 37.2736 37.2736v266.24a37.2736 37.2736 0 0 1-37.2736 37.2736z"/></svg>
         <svg class="compress" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+      </button>
+    </div>
+    <div class="grp">
+      <button class="btn" id="dmBtn" title="暗色模式">
+        <svg class="moon" viewBox="0 0 1024 1024" fill="currentColor" width="16" height="16"><path d="M548.352 947.996444a436.679111 436.679111 0 0 0 358.4-187.733333 29.127111 29.127111 0 0 0 1.649778-30.549333 27.932444 27.932444 0 0 0-26.510222-15.189334l-6.997334 0.341334h-6.542222a377.799111 377.799111 0 0 1-310.556444-593.351111 29.127111 29.127111 0 0 0 1.649777-30.549334 28.444444 28.444444 0 0 0-26.510222-15.189333 436.110222 436.110222 0 0 0 15.530667 871.879111z m274.716444-176.753777A377.856 377.856 0 1 1 479.004444 140.515556a436.110222 436.110222 0 0 0 344.064 630.727111z"/></svg>
+        <svg class="sun" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="2.5"/><path d="M8 2v2M8 12v2M2 8h2M12 8h2"/></svg>
       </button>
     </div>
   </div>
@@ -288,6 +326,7 @@ const tocPanel  = document.getElementById('tocPanel');
 const progBanner= document.getElementById('progBanner');
 const progPage  = document.getElementById('progPage');
 const fsBtn     = document.getElementById('fsBtn');
+const dmBtn     = document.getElementById('dmBtn');
 
 // 最近打开的 PDF 文件名（用于进度记忆）
 let lastFileName = '';
@@ -500,6 +539,17 @@ document.addEventListener('fullscreenchange', ()=>{
   document.getElementById('app').classList.toggle('fullscreen', isFS);
   fsBtn.title = isFS ? '退出全屏' : '全屏阅读';
 });
+
+// ── 暗色模式 ──
+function toggleDark(force){
+  const on = force !== undefined ? force : !document.documentElement.classList.contains('dark');
+  document.documentElement.classList.toggle('dark', on);
+  dmBtn.title = on ? '日间模式' : '暗色模式';
+  try { localStorage.setItem('pdfDarkMode', on ? '1' : ''); } catch(e) {}
+}
+dmBtn.addEventListener('click', ()=> toggleDark());
+// 初始化：读取上次暗色模式偏好
+try { if(localStorage.getItem('pdfDarkMode') === '1') toggleDark(true); } catch(e) {}
 
 pdfViewer.eventBus.on('scalechanging', updateZoomLabel);
 pdfViewer.eventBus.on('pagechanging', updatePageInfo);
