@@ -374,7 +374,7 @@
       <button class="btn" id="zoomIn" title="放大">+</button>
       <button class="btn" id="zoomFit">适应宽度</button>
     </div>
-    <div class="grp">
+    <div class="grp" id="pageGrp" style="display:none">
       <span id="pageInfo">未打开</span>
       <input id="jumpInput" type="number" min="1" placeholder="页">
       <button class="btn" id="jumpBtn">跳转</button>
@@ -708,6 +708,8 @@ function hideEmpty(){
   empty.style.display = 'none';
   const footer = document.getElementById('appFooter');
   if(footer) footer.style.display = 'none';
+  const pageGrp = document.getElementById('pageGrp');
+  if(pageGrp) pageGrp.style.display = '';
 }
 
 function applySpread(){
@@ -907,6 +909,8 @@ function goHome(){
   empty.style.display = '';
   const footer = document.getElementById('appFooter');
   if(footer) footer.style.display = '';
+  const pageGrp = document.getElementById('pageGrp');
+  if(pageGrp) pageGrp.style.display = 'none';
   pageInfo.textContent = '未打开';
   zoomVal.textContent = '100%';
   jumpInput.max = 1;
