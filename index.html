@@ -818,6 +818,9 @@ function dismissProgress(){
   progBanner.classList.remove('show');
   localStorage.removeItem(PROGRESS_KEY);
 }
+function hideProgress(){
+  progBanner.classList.remove('show');
+}
 
 // ---------- load ----------
 async function loadFile(file, options = {}){
@@ -916,6 +919,8 @@ function goHome(){
   jumpInput.max = 1;
   jumpInput.value = '';
   jumpInput.placeholder = '页';
+  // 清除进度记忆横幅（仅视觉隐藏，保留 localStorage 数据以便下次重新打开）
+  progBanner.classList.remove('show');
   // 清除搜索
   searchBtn.classList.remove('active');
   searchBar.classList.remove('show');
@@ -1084,7 +1089,7 @@ progBanner.addEventListener('click', (e)=>{
   const saved = checkProgress(lastFileName);
   if(saved && saved.page && pdfDoc){
     pdfViewer.scrollPageIntoView({ pageNumber: saved.page });
-    dismissProgress();
+    hideProgress(); // 只隐藏不删除记录，后续翻页时会由 pagechanging → saveProgress 更新位置
   }
 });
 
