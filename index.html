@@ -928,14 +928,17 @@ homeBtn.addEventListener('click', goHome);
 zoomIn.addEventListener('click', ()=>{
   fitWidth = false;
   const cur = pdfViewer.currentScale || 1;
-  const next = cur * 1.1;
-  pdfViewer.currentScale = (cur < 1 && next > 1) ? 1 : next;
+  const next = Math.round(cur * 1.1 * 100) / 100;
+  // 消除 Safari 浮动精度误差（cur 可能为 0.9999999 而非精确 1.0）
+  const EPS = 0.005;
+  pdfViewer.currentScale = (cur < 1 - EPS && next > 1) ? 1 : next;
 });
 zoomOut.addEventListener('click', ()=>{
   fitWidth = false;
   const cur = pdfViewer.currentScale || 1;
-  const next = cur / 1.1;
-  pdfViewer.currentScale = Math.max(0.1, (cur > 1 && next < 1) ? 1 : next);
+  const next = Math.round(cur / 1.1 * 100) / 100;
+  const EPS = 0.005;
+  pdfViewer.currentScale = Math.max(0.1, (cur > 1 + EPS && next < 1) ? 1 : next);
 });
 zoomFit.addEventListener('click', ()=>{
   if(fitWidth){
