@@ -296,6 +296,40 @@
     border-bottom-color:#2ea043 !important;
   }
 
+  /* ── 确认弹框 ── */
+  #modalOverlay{
+    position:fixed;inset:0;background:rgba(0,0,0,.35);
+    z-index:90;display:none;align-items:center;justify-content:center;
+    animation:fadeIn .18s ease;
+  }
+  #modalOverlay.show{display:flex}
+  #modalBox{
+    background:var(--bar);border-radius:var(--radius);
+    box-shadow:0 8px 30px rgba(0,0,0,.12);
+    width:340px;max-width:90%;padding:28px 24px 20px;
+    text-align:center;animation:scaleIn .2s ease;
+  }
+  #modalBox .modal-icon{font-size:28px;margin-bottom:10px;display:block;color:#c0392b;}
+  #modalBox .modal-title{font-size:15px;font-weight:500;color:var(--ink);margin-bottom:6px;}
+  #modalBox .modal-desc{font-size:13px;color:var(--sub);line-height:1.5;margin-bottom:20px;}
+  #modalBox .modal-actions{display:flex;gap:10px;justify-content:center;}
+  #modalBox .modal-actions button{
+    flex:1;padding:8px 0;border-radius:8px;border:none;
+    font-size:13px;cursor:pointer;transition:all .12s;
+    height:36px;
+  }
+  #modalBox .modal-cancel{background:#f5f5f7;color:var(--ink);}
+  #modalBox .modal-cancel:hover{background:#e8e8ed;}
+  #modalBox .modal-confirm{background:#c0392b;color:#fff;font-weight:500;}
+  #modalBox .modal-confirm:hover{background:#a93226;}
+  .dark #modalOverlay{background:rgba(0,0,0,.55)}
+  .dark #modalBox .modal-cancel{background:#3a3a40;color:var(--ink)}
+  .dark #modalBox .modal-cancel:hover{background:#4a4a50}
+  .dark #modalBox .modal-confirm{background:#c0392b;color:#fff}
+  .dark #modalBox .modal-confirm:hover{background:#a93226}
+  @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+  @keyframes scaleIn{from{opacity:0;transform:scale(.92)}to{opacity:1;transform:scale(1)}}
+
   /* ── 打印模式：仅打印 PDF 页面 ── */
   @media print{
     @page{margin:0}
@@ -410,6 +444,17 @@
 </div>
 <div id="loading"><div class="spinner"></div><div class="spinner-text">正在加载 PDF…</div></div>
 <div id="error"></div>
+<div id="modalOverlay">
+  <div id="modalBox">
+    <span class="modal-icon">🗑</span>
+    <div class="modal-title">清空所有打开记录？</div>
+    <div class="modal-desc">此操作将删除所有已保存的文件数据，<br>且无法撤销。</div>
+    <div class="modal-actions">
+      <button class="modal-cancel" id="modalCancel">取消</button>
+      <button class="modal-confirm" id="modalConfirm">确定清空</button>
+    </div>
+  </div>
+</div>
 <input type="file" id="fileInput" accept="application/pdf" hidden>
 
 <script>
@@ -626,13 +671,9 @@ recentFilesEl.addEventListener('click', async (e) => {
     renderRecentFiles(updated);
     return;
   }
-  // ── 全部清空（二次确认） ──
+  // ── 全部清空（自定义弹框确认） ──
   if(e.target.id === 'clearAllBtn'){
-    if(!confirm('确定清空所有打开记录？\n此操作无法撤销。')) return;
-    const list = getRecentList();
-    for(const item of list) await deleteFileData(item.id);
-    saveRecentList([]);
-    renderRecentFiles([]);
+    document.getElementById('modalOverlay').classList.add('show');
     return;
   }
   // ── 打开文件 ──
@@ -1097,6 +1138,22 @@ document.addEventListener('dragover', e=> e.preventDefault());
 document.addEventListener('drop', e=> e.preventDefault());
 
 window.addEventListener('resize', ()=>{ applySpread(); updatePageInfo(); });
+
+// ── 确认弹框 ──
+const modalOverlay = document.getElementById('modalOverlay');
+const modalConfirm = document.getElementById('modalConfirm');
+const modalCancel  = document.getElementById('modalCancel');
+modalConfirm.addEventListener('click', async () => {
+  modalOverlay.classList.remove('show');
+  const list = getRecentList();
+  for(const item of list) await deleteFileData(item.id);
+  saveRecentList([]);
+  renderRecentFiles([]);
+});
+modalCancel.addEventListener('click', () => modalOverlay.classList.remove('show'));
+modalOverlay.addEventListener('click', (e) => {
+  if(e.target === modalOverlay) modalOverlay.classList.remove('show');
+});
 
 // initial
 document.getElementById('footerYear').textContent = new Date().getFullYear();
