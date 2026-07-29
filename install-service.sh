@@ -18,6 +18,12 @@ if [ "$1" = "--remove" ]; then
   exit 0
 fi
 
+# 确保依赖已安装
+if [ ! -f "$DIR/node_modules/pdfjs-dist/build/pdf.worker.mjs" ]; then
+  echo "正在安装前端依赖（pdfjs-dist）..."
+  npm install --prefix "$DIR" --ignore-scripts --no-audit --no-fund 2>&1 | tail -2
+fi
+
 # 生成 plist（替换项目路径占位符）
 mkdir -p "$PLIST_DIR"
 sed "s|/ABSOLUTE/PATH/TO/PROJECT|$DIR|g" \

@@ -36,6 +36,7 @@
 ```bash
 git clone https://github.com/renhairong/PDF-Reader.git
 cd PDF-Reader
+npm install
 ./install-service.sh
 ```
 
