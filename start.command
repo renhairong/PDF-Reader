@@ -1,6 +1,7 @@
 #!/bin/bash
 cd "$(dirname "$0")"
 echo "正在启动 PDF 阅读器服务器..."
+echo "（如需开机自启，请先运行 ./install-service.sh）"
 python3 -m http.server 8137 &
 sleep 1
 open http://localhost:8137
