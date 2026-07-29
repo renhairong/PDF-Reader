@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>云轩 PDF 阅读器 · 网页版</title>
+<link rel="icon" type="image/png" href="./logo.png">
+<link rel="apple-touch-icon" href="./logo.png">
 <link rel="stylesheet" href="./node_modules/pdfjs-dist/web/pdf_viewer.css">
 <style>
   :root{
@@ -28,6 +30,7 @@
   }
   #appTitle{
     position:absolute;left:20px;top:50%;transform:translateY(-50%);
+    display:flex;align-items:center;gap:6px;
     font-weight:600;font-size:14px;letter-spacing:.3px;
     color:var(--sub);user-select:none;pointer-events:none;
   }
@@ -355,7 +358,7 @@
 <div id="app">
   <div id="fsStrip"></div>
   <div id="toolbar">
-    <span id="appTitle">云轩 PDF 阅读器</span>
+    <span id="appTitle"><img src="./logo.png" alt="" style="height:30px;width:30px;flex-shrink:0;">云轩 PDF 阅读器</span>
     <!-- 打开文件已移至空态文案 -->
     <div class="grp">
       <button class="btn" id="homeBtn" title="返回首页">
