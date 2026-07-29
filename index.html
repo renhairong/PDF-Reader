@@ -354,7 +354,8 @@
   .dark #annMenu button:hover{background:#3a3a40}
   .ann-hl{border-radius:2px;pointer-events:none;mix-blend-mode:multiply;}
   .dark .ann-hl{mix-blend-mode:screen;opacity:.5}
-  .ann-bub{font-size:13px;line-height:1;filter:drop-shadow(0 1px 2px rgba(0,0,0,.15));}
+  .ann-bub{font-size:13px;line-height:1;filter:drop-shadow(0 1px 2px rgba(0,0,0,.15));margin-top:-14px;}
+  .ann-bub svg{color:var(--brand);vertical-align:middle;}
   .ann-pop{
     position:absolute;bottom:100%;left:50%;transform:translateX(-50%);
     background:var(--bar);border:1px solid var(--line);
@@ -527,12 +528,12 @@
 
 <!-- ── 批注 UI ── -->
 <div id="annMenu">
-  <button id="annCopy">📋 复制</button>
-  <button id="annNew">💬 批注</button>
+  <button id="annCopy"><svg viewBox="0 0 1024 1024" fill="currentColor" width="14" height="14" style="vertical-align:middle;margin-right:4px"><path d="M867.09 64.12H363.93A92.92 92.92 0 0 0 271 157v113.12H144a80 80 0 0 0-80 80v530a80 80 0 0 0 80 80h530a80 80 0 0 0 80-80v-126h113.09A92.92 92.92 0 0 0 960 661.2V157a92.92 92.92 0 0 0-92.91-92.88zM674 900.12H144a20 20 0 0 1-20-20v-530a20 20 0 0 1 20-20h530a20 20 0 0 1 20 20v530a20 20 0 0 1-20 20zM901 661.2a32.92 32.92 0 0 1-32.92 32.92H755v-344a80 80 0 0 0-80-80H331V157a32.92 32.92 0 0 1 32.92-32.92h504.17A32.92 32.92 0 0 1 901 157z" fill="currentColor"/><path d="M542.38 495.12H277c-15.81 0-29.37 12-30.51 27.76a30 30 0 0 0 29.92 32.24h265.38c15.81 0 29.37-12 30.51-27.76a30 30 0 0 0-29.92-32.24zM542.38 675.12H277c-15.81 0-29.37 12-30.51 27.76a30 30 0 0 0 29.92 32.24h265.38c15.81 0 29.37-12 30.51-27.76a30 30 0 0 0-29.92-32.24z" fill="currentColor"/></svg>复制</button>
+  <button id="annNew"><svg viewBox="0 0 1024 1024" fill="currentColor" width="14" height="14" style="vertical-align:middle;margin-right:4px"><path d="M960.1 147.6c-18.2-16.5-41.9-25.6-66.7-25.6H131.7c-24.9 0-48.3 9.3-65.9 26.3C47.9 165.5 38 188.7 38 213.6v439.5c0 51.2 42 92.9 93.7 92.9H569v150.2c0 12.4 7.6 23.5 19.1 28 3.5 1.4 7.2 2 10.9 2 8.2 0 16.3-3.4 22.1-9.7L777.8 746h115.5c52.4 0 96.6-42.6 96.6-92.9V213.6c0.1-25.1-10.5-48.5-29.8-66zM930 653.1c0 17.2-17.4 32.9-36.6 32.9H764.7c-8.4 0-16.4 3.5-22.1 9.7L629 819.2V716c0-16.6-13.4-30-30-30H131.7c-18.6 0-33.7-14.8-33.7-32.9V213.6c0-17.7 14.8-31.6 33.7-31.6h761.7c19.5 0 36.6 14.8 36.6 31.6v439.5z" fill="currentColor"></path></svg>批注</button>
 </div>
 <div id="annInputOverlay">
   <div id="annInputBox">
-    <div class="ttl">💬 批注内容</div>
+    <div class="ttl"><svg viewBox="0 0 1024 1024" fill="currentColor" width="16" height="16" style="vertical-align:middle;margin-right:4px"><path d="M960.1 147.6c-18.2-16.5-41.9-25.6-66.7-25.6H131.7c-24.9 0-48.3 9.3-65.9 26.3C47.9 165.5 38 188.7 38 213.6v439.5c0 51.2 42 92.9 93.7 92.9H569v150.2c0 12.4 7.6 23.5 19.1 28 3.5 1.4 7.2 2 10.9 2 8.2 0 16.3-3.4 22.1-9.7L777.8 746h115.5c52.4 0 96.6-42.6 96.6-92.9V213.6c0.1-25.1-10.5-48.5-29.8-66zM930 653.1c0 17.2-17.4 32.9-36.6 32.9H764.7c-8.4 0-16.4 3.5-22.1 9.7L629 819.2V716c0-16.6-13.4-30-30-30H131.7c-18.6 0-33.7-14.8-33.7-32.9V213.6c0-17.7 14.8-31.6 33.7-31.6h761.7c19.5 0 36.6 14.8 36.6 31.6v439.5z" fill="currentColor"></path></svg>批注内容</div>
     <textarea id="annInputText" placeholder="输入批注…"></textarea>
     <div class="act">
       <button class="btn-cancel" id="annInputCancel">取消</button>
@@ -542,7 +543,9 @@
 </div>
 <div id="annEditOverlay">
   <div id="annEditBox">
-    <div class="ttl">✏️ 编辑批注</div>
+    <div class="ttl">
+      <svg viewBox="0 0 1024 1024" fill="currentColor" width="16" height="16" style="vertical-align:middle;margin-right:4px"><path d="M960.1 147.6c-18.2-16.5-41.9-25.6-66.7-25.6H131.7c-24.9 0-48.3 9.3-65.9 26.3C47.9 165.5 38 188.7 38 213.6v439.5c0 51.2 42 92.9 93.7 92.9H569v150.2c0 12.4 7.6 23.5 19.1 28 3.5 1.4 7.2 2 10.9 2 8.2 0 16.3-3.4 22.1-9.7L777.8 746h115.5c52.4 0 96.6-42.6 96.6-92.9V213.6c0.1-25.1-10.5-48.5-29.8-66zM930 653.1c0 17.2-17.4 32.9-36.6 32.9H764.7c-8.4 0-16.4 3.5-22.1 9.7L629 819.2V716c0-16.6-13.4-30-30-30H131.7c-18.6 0-33.7-14.8-33.7-32.9V213.6c0-17.7 14.8-31.6 33.7-31.6h761.7c19.5 0 36.6 14.8 36.6 31.6v439.5z" fill="currentColor"></path></svg>编辑批注
+    </div>
     <textarea id="annEditText" placeholder="批注内容"></textarea>
     <div class="act">
       <button class="btn-cancel" id="annEditCancel">取消</button>
@@ -763,7 +766,7 @@ function renderAnnotations(pageNum){
       bub.dataset.aid = a.id;
       bub.title = a.annotation || '';
       bub.style.cssText = `position:absolute;left:${a.bubX*pw}px;top:${a.bubY*ph}px;cursor:pointer;pointer-events:auto;z-index:3;`;
-      bub.textContent = '💬';
+      bub.innerHTML = '<svg viewBox="0 0 1024 1024" fill="currentColor" width="16" height="16" style="vertical-align:middle"><path d="M748.307692 196.923077a78.769231 78.769231 0 0 1 78.769231 78.769231v330.318769a78.769231 78.769231 0 0 1-78.769231 78.769231h-102.124307l-204.169847 124.100923a19.692308 19.692308 0 0 1-29.932307-16.817231v-107.283692H275.692308a78.769231 78.769231 0 0 1-78.769231-78.769231V275.692308a78.769231 78.769231 0 0 1 78.769231-78.769231h472.615384z m0 39.384615H275.692308a39.384615 39.384615 0 0 0-39.108923 34.776616L236.307692 275.692308v330.318769a39.384615 39.384615 0 0 0 34.776616 39.108923l4.608 0.275692h136.388923a39.384615 39.384615 0 0 1 39.108923 34.776616l0.275692 4.608-0.039384 72.270769 174.316307-105.944615a39.384615 39.384615 0 0 1 15.084308-5.356308l5.356308-0.354462H748.307692a39.384615 39.384615 0 0 0 39.108923-34.776615l0.275693-4.608V275.692308a39.384615 39.384615 0 0 0-34.776616-39.108923L748.307692 236.307692zM354.461538 393.846154a39.384615 39.384615 0 1 1 0 78.769231 39.384615 39.384615 0 0 1 0-78.769231z m157.538462 0a39.384615 39.384615 0 1 1 0 78.769231 39.384615 39.384615 0 0 1 0-78.769231z m157.538462 0a39.384615 39.384615 0 1 1 0 78.769231 39.384615 39.384615 0 0 1 0-78.769231z" fill="currentColor"></path></svg>';
       // hover 显示批注
       const pop = document.createElement('div');
       pop.className = 'ann-pop';
