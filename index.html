@@ -733,7 +733,7 @@ async function deleteAnnotationsByFile(fileId){
 function renderAnnotations(pageNum){
   // 清除该页现有批注 DOM
   const pageEl = document.querySelector(`.page[data-page-number="${pageNum}"]`);
-  if(!pageEl || !pdfRawData) return;
+  if(!pageEl) return;
   const old = pageEl.querySelector('.anns');
   if(old) old.remove();
   // 从 IndexedDB 读取
@@ -811,6 +811,7 @@ function renderAnnotation(inputText, selectedRects, pageNum, selectedText){
 }
 
 function renderRecentFiles(list){
+  const now = Date.now();
   let html = '<div class="rf-title">最近打开</div>';
   for(const item of list){
     const diff = now - item.time;
@@ -1409,12 +1410,41 @@ const annEditSave = document.getElementById('annEditSave');
 let annSelectedRects = null;
 let annSelectedText = '';
 let annSelectedPage = 0;
+let annTempEl = null; // 临时高亮 DOM
+
+// 显示/隐藏临时高亮（选中文字后点击批注时使用）
+function showTempHighlight(){
+  removeTempHighlight();
+  if(!annSelectedRects || !annSelectedPage) return;
+  const pageEl = document.querySelector(`.page[data-page-number="${annSelectedPage}"]`);
+  if(!pageEl) return;
+  const pw = pageEl.offsetWidth, ph = pageEl.offsetHeight;
+  if(pw < 1 || ph < 1) return;
+  const div = document.createElement('div');
+  div.className = 'anns';
+  div.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:1;overflow:hidden;';
+  for(const r of annSelectedRects){
+    const hl = document.createElement('div');
+    hl.className = 'ann-hl';
+    hl.style.cssText = `position:absolute;left:${r.left*pw}px;top:${r.top*ph}px;width:${r.width*pw}px;height:${r.height*ph}px;background:rgba(255,212,0,.35);border-radius:2px;`;
+    div.appendChild(hl);
+  }
+  pageEl.appendChild(div);
+  annTempEl = div;
+}
+function removeTempHighlight(){
+  if(annTempEl){
+    annTempEl.remove();
+    annTempEl = null;
+  }
+}
 
 // 隐藏浮动菜单
 function hideAnnMenu(){ 
   annMenu.classList.remove('show'); 
   annSelectedRects = null; 
   annSelectedText = ''; 
+  removeTempHighlight();
 }
 
 // 鼠标选中文字 → 显示浮动菜单
@@ -1473,6 +1503,7 @@ annCopy.addEventListener('click', () => {
 // 新建批注
 annNew.addEventListener('click', () => {
   if(!annSelectedRects) return;
+  showTempHighlight(); // 立即显示黄色高亮替代蓝色选中
   annInputOverlay.classList.add('show');
   annInputText.value = '';
   annInputText.focus();
@@ -1481,7 +1512,8 @@ annNew.addEventListener('click', () => {
 // 取消输入
 annInputCancel.addEventListener('click', () => {
   annInputOverlay.classList.remove('show');
-  hideAnnMenu();
+  removeTempHighlight(); // 取消时清除临时高亮
+  hideAnnMenu(); // 清除选中等状态
 });
 
 // 确认保存
