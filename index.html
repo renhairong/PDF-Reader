@@ -793,7 +793,7 @@ function showAnnotationEditor(a){
   document.getElementById('annEditText').dataset.aid = a.id;
 }
 
-function renderAnnotation(inputText, selectedRects, pageNum, selectedText){
+async function renderAnnotation(inputText, selectedRects, pageNum, selectedText){
   const a = {
     id: Date.now() + '_' + Math.random().toString(36).slice(2, 6),
     fileId: lastFileId,
@@ -806,7 +806,7 @@ function renderAnnotation(inputText, selectedRects, pageNum, selectedText){
     color: '#FFD700',
     createdAt: Date.now()
   };
-  saveAnnotation(a);
+  await saveAnnotation(a); // 先写入再渲染，避免 IDB 读写竞态
   renderAnnotations(pageNum);
 }
 
@@ -1450,9 +1450,10 @@ function hideAnnMenu(){
 // 鼠标选中文字 → 显示浮动菜单
 document.addEventListener('mouseup', (e) => {
   const sel = window.getSelection();
+  // 点击在批注 UI 内，不触发任何菜单关闭逻辑
+  if(e.target.closest('#annMenu, #annInputOverlay, #annEditOverlay')) return;
   if(!sel || sel.isCollapsed || !sel.toString().trim()) {
-    // 点击空白区域隐藏菜单
-    if(!e.target.closest('#annMenu')) hideAnnMenu();
+    hideAnnMenu();
     return;
   }
   // 只处理在 viewer 内的选中
