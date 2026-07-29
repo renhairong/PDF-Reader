@@ -364,41 +364,96 @@
     box-shadow:0 2px 8px rgba(0,0,0,.08);pointer-events:none;z-index:10;
     margin-bottom:4px;
   }
-  #annInputOverlay,#annEditOverlay{
+  /* ── 批注输入：便签纸样式 ── */
+  #annInputOverlay{
+    position:fixed;z-index:95;display:none;
+    width:260px;
+    background:#f5faf3;border:1px solid #e3eee0;border-radius:8px;
+    box-shadow:0 6px 24px rgba(20,50,20,.08),0 1px 2px rgba(20,50,20,.04);
+    overflow:hidden;
+    animation:scaleIn .12s ease;
+  }
+  #annInputOverlay.show{display:block}
+  #annInputOverlay .head{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:6px 6px 6px 12px;
+    background:#eef6ec;
+    border-bottom:1px solid #e3eee0;
+    font-size:12px;color:#5a7a5a;font-weight:500;
+    user-select:none;
+  }
+  #annInputOverlay .head svg{color:#5a7a5a;vertical-align:middle;margin-right:4px}
+  #annInputOverlay .ann-close{
+    width:22px;height:22px;border-radius:4px;border:none;
+    background:transparent;color:#8aa590;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+    transition:all .12s;font-size:13px;line-height:1;
+  }
+  #annInputOverlay .ann-close:hover{background:rgba(31,136,61,.08);color:var(--brand)}
+  #annInputBox{padding:8px;}
+  #annInputBox textarea{
+    width:100%;height:64px;resize:none;
+    border:none;border-radius:6px;
+    padding:6px 8px;font-size:13px;line-height:1.5;font-family:inherit;
+    color:#2d4a2d;background:#fff;
+    box-sizing:border-box;outline:none;
+    transition:box-shadow .12s;
+  }
+  #annInputBox textarea:focus{box-shadow:0 0 0 2px rgba(31,136,61,.12)}
+  #annInputBox textarea::placeholder{color:#a8c0a8;font-weight:300}
+  #annInputBox .act{display:flex;justify-content:flex-end;margin-top:6px;}
+  #annInputBox .btn-ok{
+    height:24px;padding:0 10px;border-radius:12px;border:none;
+    background:var(--brand);color:#fff;cursor:pointer;
+    display:inline-flex;align-items:center;justify-content:center;
+    transition:all .12s;font-size:13px;line-height:1;
+  }
+  #annInputBox .btn-ok:hover{filter:brightness(.92)}
+  #annInputBox .btn-ok svg{display:block}
+  .dark #annInputOverlay{background:#1d2a1c;border-color:#2a3d29}
+  .dark #annInputOverlay .head{background:#202f20;border-bottom-color:#2a3d29;color:#9bba9b}
+  .dark #annInputOverlay .head svg{color:#9bba9b}
+  .dark #annInputOverlay .ann-close{color:#6b8a6b}
+  .dark #annInputOverlay .ann-close:hover{background:rgba(120,200,120,.1);color:#9bba9b}
+  .dark #annInputBox textarea{
+    background:#283828;border-color:transparent;color:#d4e4d4;
+  }
+  .dark #annInputBox textarea::placeholder{color:#5a7a5a}
+
+  /* ── 批注编辑 ── */
+  #annEditOverlay{
     position:fixed;inset:0;background:rgba(0,0,0,.25);z-index:95;
     display:none;align-items:center;justify-content:center;
     animation:fadeIn .15s ease;
   }
-  #annInputOverlay.show,#annEditOverlay.show{display:flex}
-  #annInputBox,#annEditBox{
+  #annEditOverlay.show{display:flex}
+  #annEditBox{
     background:var(--bar);border-radius:var(--radius);
     box-shadow:0 8px 30px rgba(0,0,0,.12);
     width:360px;max-width:90%;padding:20px;text-align:center;
     animation:scaleIn .2s ease;
   }
-  #annInputBox textarea,#annEditBox textarea{
+  #annEditBox textarea{
     width:100%;height:80px;resize:none;border:1px solid var(--line);
     border-radius:6px;padding:8px 10px;font-size:13px;font-family:inherit;
     color:var(--ink);background:transparent;box-sizing:border-box;
     outline:none;transition:border-color .12s;
   }
-  #annInputBox textarea:focus{border-color:var(--brand)}
-  #annInputBox .ttl,#annEditBox .ttl{font-size:14px;font-weight:500;color:var(--ink);margin-bottom:10px;}
-  #annInputBox .act,#annEditBox .act{display:flex;gap:8px;justify-content:center;margin-top:10px;}
-  #annInputBox .act button,#annEditBox .act button{
+  #annEditBox textarea:focus{border-color:var(--brand)}
+  #annEditBox .ttl{font-size:14px;font-weight:500;color:var(--ink);margin-bottom:10px;}
+  #annEditBox .act{display:flex;gap:8px;justify-content:center;margin-top:10px;}
+  #annEditBox .act button{
     flex:1;padding:7px 0;border-radius:8px;border:none;
     font-size:13px;cursor:pointer;transition:all .12s;height:34px;
   }
-  #annInputBox .btn-cancel,#annEditBox .btn-cancel{background:#f5f5f7;color:var(--ink)}
-  #annInputBox .btn-cancel:hover,#annEditBox .btn-cancel:hover{background:#e8e8ed}
-  #annInputBox .btn-ok{background:var(--brand);color:#fff;font-weight:500}
-  #annInputBox .btn-ok:hover{filter:brightness(.9)}
+  #annEditBox .btn-cancel{background:#f5f5f7;color:var(--ink)}
+  #annEditBox .btn-cancel:hover{background:#e8e8ed}
   #annEditBox .btn-save{background:var(--brand);color:#fff;font-weight:500}
   #annEditBox .btn-save:hover{filter:brightness(.9)}
   #annEditBox .btn-del{background:#c0392b;color:#fff;font-weight:500}
   #annEditBox .btn-del:hover{background:#a93226}
-  .dark #annInputBox .btn-cancel,.dark #annEditBox .btn-cancel{background:#3a3a40;color:var(--ink)}
-  .dark #annInputBox .btn-cancel:hover,.dark #annEditBox .btn-cancel:hover{background:#4a4a50}
+  .dark #annEditBox .btn-cancel{background:#3a3a40;color:var(--ink)}
+  .dark #annEditBox .btn-cancel:hover{background:#4a4a50}
 
   /* ── 打印模式：仅打印 PDF 页面 ── */
   @media print{
@@ -532,12 +587,14 @@
   <button id="annNew"><svg viewBox="0 0 1024 1024" fill="currentColor" width="14" height="14" style="vertical-align:middle;margin-right:4px"><path d="M960.1 147.6c-18.2-16.5-41.9-25.6-66.7-25.6H131.7c-24.9 0-48.3 9.3-65.9 26.3C47.9 165.5 38 188.7 38 213.6v439.5c0 51.2 42 92.9 93.7 92.9H569v150.2c0 12.4 7.6 23.5 19.1 28 3.5 1.4 7.2 2 10.9 2 8.2 0 16.3-3.4 22.1-9.7L777.8 746h115.5c52.4 0 96.6-42.6 96.6-92.9V213.6c0.1-25.1-10.5-48.5-29.8-66zM930 653.1c0 17.2-17.4 32.9-36.6 32.9H764.7c-8.4 0-16.4 3.5-22.1 9.7L629 819.2V716c0-16.6-13.4-30-30-30H131.7c-18.6 0-33.7-14.8-33.7-32.9V213.6c0-17.7 14.8-31.6 33.7-31.6h761.7c19.5 0 36.6 14.8 36.6 31.6v439.5z" fill="currentColor"></path></svg>批注</button>
 </div>
 <div id="annInputOverlay">
+  <div class="head">
+    <span><svg viewBox="0 0 1024 1024" fill="currentColor" width="14" height="14"><path d="M960.1 147.6c-18.2-16.5-41.9-25.6-66.7-25.6H131.7c-24.9 0-48.3 9.3-65.9 26.3C47.9 165.5 38 188.7 38 213.6v439.5c0 51.2 42 92.9 93.7 92.9H569v150.2c0 12.4 7.6 23.5 19.1 28 3.5 1.4 7.2 2 10.9 2 8.2 0 16.3-3.4 22.1-9.7L777.8 746h115.5c52.4 0 96.6-42.6 96.6-92.9V213.6c0.1-25.1-10.5-48.5-29.8-66zM930 653.1c0 17.2-17.4 32.9-36.6 32.9H764.7c-8.4 0-16.4 3.5-22.1 9.7L629 819.2V716c0-16.6-13.4-30-30-30H131.7c-18.6 0-33.7-14.8-33.7-32.9V213.6c0-17.7 14.8-31.6 33.7-31.6h761.7c19.5 0 36.6 14.8 36.6 31.6v439.5z" fill="currentColor"/></svg>添加批注</span>
+    <button class="ann-close" id="annInputClose">✕</button>
+  </div>
   <div id="annInputBox">
-    <div class="ttl"><svg viewBox="0 0 1024 1024" fill="currentColor" width="16" height="16" style="vertical-align:middle;margin-right:4px"><path d="M960.1 147.6c-18.2-16.5-41.9-25.6-66.7-25.6H131.7c-24.9 0-48.3 9.3-65.9 26.3C47.9 165.5 38 188.7 38 213.6v439.5c0 51.2 42 92.9 93.7 92.9H569v150.2c0 12.4 7.6 23.5 19.1 28 3.5 1.4 7.2 2 10.9 2 8.2 0 16.3-3.4 22.1-9.7L777.8 746h115.5c52.4 0 96.6-42.6 96.6-92.9V213.6c0.1-25.1-10.5-48.5-29.8-66zM930 653.1c0 17.2-17.4 32.9-36.6 32.9H764.7c-8.4 0-16.4 3.5-22.1 9.7L629 819.2V716c0-16.6-13.4-30-30-30H131.7c-18.6 0-33.7-14.8-33.7-32.9V213.6c0-17.7 14.8-31.6 33.7-31.6h761.7c19.5 0 36.6 14.8 36.6 31.6v439.5z" fill="currentColor"></path></svg>批注内容</div>
     <textarea id="annInputText" placeholder="输入批注…"></textarea>
     <div class="act">
-      <button class="btn-cancel" id="annInputCancel">取消</button>
-      <button class="btn-ok" id="annInputOk">✓ 保存</button>
+      <button class="btn-ok" id="annInputOk">✓ 完成</button>
     </div>
   </div>
 </div>
@@ -1402,7 +1459,7 @@ const annCopy = document.getElementById('annCopy');
 const annNew = document.getElementById('annNew');
 const annInputOverlay = document.getElementById('annInputOverlay');
 const annInputText = document.getElementById('annInputText');
-const annInputCancel = document.getElementById('annInputCancel');
+const annInputClose = document.getElementById('annInputClose');
 const annInputOk = document.getElementById('annInputOk');
 const annEditOverlay = document.getElementById('annEditOverlay');
 const annEditText = document.getElementById('annEditText');
@@ -1513,16 +1570,27 @@ annCopy.addEventListener('click', () => {
 annNew.addEventListener('click', () => {
   if(!annSelectedRects) return;
   showTempHighlight(); // 立即显示黄色高亮替代蓝色选中
+  // 定位输入框到浮动菜单附近
+  const mRect = annMenu.getBoundingClientRect();
+  let ix = mRect.left;
+  let iy = mRect.bottom + 6;
+  const iw = 260;
+  const ih = 160;
+  if(ix + iw > window.innerWidth - 8) ix = window.innerWidth - iw - 8;
+  if(iy + ih > window.innerHeight - 8) iy = mRect.top - ih - 6;
+  if(iy < 8) iy = 8;
+  annInputOverlay.style.left = ix + 'px';
+  annInputOverlay.style.top = iy + 'px';
   annInputOverlay.classList.add('show');
   annInputText.value = '';
   annInputText.focus();
 });
 
-// 取消输入
-annInputCancel.addEventListener('click', () => {
+// 关闭输入框
+annInputClose.addEventListener('click', () => {
   annInputOverlay.classList.remove('show');
-  removeTempHighlight(); // 取消时清除临时高亮
-  hideAnnMenu(); // 清除选中等状态
+  removeTempHighlight();
+  hideAnnMenu();
 });
 
 // 确认保存
