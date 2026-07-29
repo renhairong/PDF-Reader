@@ -77,8 +77,9 @@
   /* viewer */
   #viewerContainer{flex:1;overflow:auto;background:var(--bg);position:absolute;top:52px;left:0;right:0;bottom:0;}
   .pdfViewer{margin:0 auto;padding:24px;}
-  .pdfViewer .canvasWrapper{box-shadow:0 2px 8px rgba(0,0,0,.06),0 1px 3px rgba(0,0,0,.04);}
-  .dark .pdfViewer .canvasWrapper{box-shadow:0 2px 10px rgba(0,0,0,.18),0 1px 4px rgba(0,0,0,.12);}
+  .pdfViewer .page{box-shadow:0 2px 8px rgba(0,0,0,.06),0 1px 3px rgba(0,0,0,.04);}
+  .dark .pdfViewer .page{box-shadow:0 2px 10px rgba(0,0,0,.18),0 1px 4px rgba(0,0,0,.12);}
+  .pdfViewer.removePageBorders .page{background:transparent !important}
   /* empty state */
   #empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--sub);gap:12px;pointer-events:none;}
   #empty .big{font-size:16px;color:var(--ink);font-weight:500;}
@@ -487,6 +488,7 @@ if (!PDFViewer) {
 
 const container = document.getElementById('viewerContainer');
 const viewerEl  = document.getElementById('viewer');
+viewerEl.classList.add('removePageBorders'); // 去除 pdf.js 9px 透明边框，让阴影紧贴纸张
 // v4: PDFViewer 不再自动创建 EventBus，必须显式传入
 const eventBus  = new window.pdfjsViewer.EventBus();
 const { ScrollMode, SpreadMode, PDFLinkService, PDFFindController } = window.pdfjsViewer;
