@@ -1456,6 +1456,11 @@ document.addEventListener('mouseup', (e) => {
     hideAnnMenu();
     return;
   }
+  // 如果菜单已显示 + 选中文字和上次相同 → 点选已有文字，隐藏菜单
+  if(annMenu.classList.contains('show') && sel.toString().trim() === annSelectedText){
+    hideAnnMenu();
+    return;
+  }
   // 只处理在 viewer 内的选中
   if(!e.target.closest('.pdfViewer')) return;
   const text = sel.toString().trim();
