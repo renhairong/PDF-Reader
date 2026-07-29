@@ -420,40 +420,66 @@
   }
   .dark #annInputBox textarea::placeholder{color:#5a7a5a}
 
-  /* ── 批注编辑 ── */
+  /* ── 批注编辑：便签纸样式（与新增一致） ── */
   #annEditOverlay{
-    position:fixed;inset:0;background:rgba(0,0,0,.25);z-index:95;
-    display:none;align-items:center;justify-content:center;
-    animation:fadeIn .15s ease;
+    position:fixed;z-index:95;display:none;
+    width:280px;
+    background:#f5faf3;border:1px solid #e3eee0;border-radius:8px;
+    box-shadow:0 6px 24px rgba(20,50,20,.08),0 1px 2px rgba(20,50,20,.04);
+    overflow:hidden;
+    animation:scaleIn .12s ease;
   }
-  #annEditOverlay.show{display:flex}
-  #annEditBox{
-    background:var(--bar);border-radius:var(--radius);
-    box-shadow:0 8px 30px rgba(0,0,0,.12);
-    width:360px;max-width:90%;padding:20px;text-align:center;
-    animation:scaleIn .2s ease;
+  #annEditOverlay.show{display:block}
+  #annEditOverlay .head{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:6px 6px 6px 12px;
+    background:#eef6ec;
+    border-bottom:1px solid #e3eee0;
+    font-size:12px;color:#5a7a5a;font-weight:500;
+    user-select:none;
   }
+  #annEditOverlay .head svg{color:#5a7a5a;vertical-align:middle;margin-right:4px}
+  #annEditOverlay .ann-edit-close{
+    width:22px;height:22px;border-radius:4px;border:none;
+    background:transparent;color:#8aa590;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+    transition:all .12s;font-size:13px;line-height:1;
+  }
+  #annEditOverlay .ann-edit-close:hover{background:rgba(31,136,61,.08);color:var(--brand)}
+  #annEditBox{padding:8px;}
   #annEditBox textarea{
-    width:100%;height:80px;resize:none;border:1px solid var(--line);
-    border-radius:6px;padding:8px 10px;font-size:13px;font-family:inherit;
-    color:var(--ink);background:transparent;box-sizing:border-box;
-    outline:none;transition:border-color .12s;
+    width:100%;height:64px;resize:none;
+    border:none;border-radius:6px;
+    padding:6px 8px;font-size:13px;line-height:1.5;font-family:inherit;
+    color:#2d4a2d;background:#fff;
+    box-sizing:border-box;outline:none;
+    transition:box-shadow .12s;
   }
-  #annEditBox textarea:focus{border-color:var(--brand)}
-  #annEditBox .ttl{font-size:14px;font-weight:500;color:var(--ink);margin-bottom:10px;}
-  #annEditBox .act{display:flex;gap:8px;justify-content:center;margin-top:10px;}
+  #annEditBox textarea:focus{box-shadow:0 0 0 2px rgba(31,136,61,.12)}
+  #annEditBox .act{display:flex;align-items:center;justify-content:space-between;margin-top:6px;}
+  #annEditBox .act-left{display:flex;gap:6px;}
+  #annEditBox .act-right{display:flex;gap:6px;}
   #annEditBox .act button{
-    flex:1;padding:7px 0;border-radius:8px;border:none;
-    font-size:13px;cursor:pointer;transition:all .12s;height:34px;
+    height:24px;padding:0 10px;border-radius:12px;border:none;
+    font-size:12px;cursor:pointer;
+    display:inline-flex;align-items:center;gap:4px;
+    transition:all .12s;line-height:1;
   }
-  #annEditBox .btn-cancel{background:#f5f5f7;color:var(--ink)}
-  #annEditBox .btn-cancel:hover{background:#e8e8ed}
-  #annEditBox .btn-save{background:var(--brand);color:#fff;font-weight:500}
-  #annEditBox .btn-save:hover{filter:brightness(.9)}
-  #annEditBox .btn-del{background:#c0392b;color:#fff;font-weight:500}
-  #annEditBox .btn-del:hover{background:#a93226}
-  .dark #annEditBox .btn-cancel{background:#3a3a40;color:var(--ink)}
-  .dark #annEditBox .btn-cancel:hover{background:#4a4a50}
+  #annEditBox .btn-del{background:transparent;color:#c0392b;border:1px solid #e8d4d0 !important}
+  #annEditBox .btn-del:hover{background:#fbecea;border-color:#c0392b !important}
+  #annEditBox .btn-save{background:var(--brand);color:#fff;}
+  #annEditBox .btn-save:hover{filter:brightness(.92)}
+  #annEditBox .act svg{width:12px;height:12px;display:block}
+  .dark #annEditOverlay{background:#1d2a1c;border-color:#2a3d29}
+  .dark #annEditOverlay .head{background:#202f20;border-bottom-color:#2a3d29;color:#9bba9b}
+  .dark #annEditOverlay .head svg{color:#9bba9b}
+  .dark #annEditOverlay .ann-edit-close{color:#6b8a6b}
+  .dark #annEditOverlay .ann-edit-close:hover{background:rgba(120,200,120,.1);color:#9bba9b}
+  .dark #annEditBox textarea{
+    background:#283828;color:#d4e4d4;
+  }
+  .dark #annEditBox .btn-del{color:#e57373;border-color:#4a2c2a !important}
+  .dark #annEditBox .btn-del:hover{background:#3a2828}
 
   /* ── 打印模式：仅打印 PDF 页面 ── */
   @media print{
@@ -599,15 +625,25 @@
   </div>
 </div>
 <div id="annEditOverlay">
+  <div class="head">
+    <span><svg viewBox="0 0 1024 1024" fill="currentColor" width="14" height="14"><path d="M960.1 147.6c-18.2-16.5-41.9-25.6-66.7-25.6H131.7c-24.9 0-48.3 9.3-65.9 26.3C47.9 165.5 38 188.7 38 213.6v439.5c0 51.2 42 92.9 93.7 92.9H569v150.2c0 12.4 7.6 23.5 19.1 28 3.5 1.4 7.2 2 10.9 2 8.2 0 16.3-3.4 22.1-9.7L777.8 746h115.5c52.4 0 96.6-42.6 96.6-92.9V213.6c0.1-25.1-10.5-48.5-29.8-66zM930 653.1c0 17.2-17.4 32.9-36.6 32.9H764.7c-8.4 0-16.4 3.5-22.1 9.7L629 819.2V716c0-16.6-13.4-30-30-30H131.7c-18.6 0-33.7-14.8-33.7-32.9V213.6c0-17.7 14.8-31.6 33.7-31.6h761.7c19.5 0 36.6 14.8 36.6 31.6v439.5z" fill="currentColor"/></svg>编辑批注</span>
+    <button class="ann-edit-close" id="annEditClose">✕</button>
+  </div>
   <div id="annEditBox">
-    <div class="ttl">
-      <svg viewBox="0 0 1024 1024" fill="currentColor" width="16" height="16" style="vertical-align:middle;margin-right:4px"><path d="M960.1 147.6c-18.2-16.5-41.9-25.6-66.7-25.6H131.7c-24.9 0-48.3 9.3-65.9 26.3C47.9 165.5 38 188.7 38 213.6v439.5c0 51.2 42 92.9 93.7 92.9H569v150.2c0 12.4 7.6 23.5 19.1 28 3.5 1.4 7.2 2 10.9 2 8.2 0 16.3-3.4 22.1-9.7L777.8 746h115.5c52.4 0 96.6-42.6 96.6-92.9V213.6c0.1-25.1-10.5-48.5-29.8-66zM930 653.1c0 17.2-17.4 32.9-36.6 32.9H764.7c-8.4 0-16.4 3.5-22.1 9.7L629 819.2V716c0-16.6-13.4-30-30-30H131.7c-18.6 0-33.7-14.8-33.7-32.9V213.6c0-17.7 14.8-31.6 33.7-31.6h761.7c19.5 0 36.6 14.8 36.6 31.6v439.5z" fill="currentColor"></path></svg>编辑批注
-    </div>
     <textarea id="annEditText" placeholder="批注内容"></textarea>
     <div class="act">
-      <button class="btn-cancel" id="annEditCancel">取消</button>
-      <button class="btn-del" id="annEditDel">🗑 删除</button>
-      <button class="btn-save" id="annEditSave">✓ 保存</button>
+      <div class="act-left">
+        <button class="btn-del" id="annEditDel">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>
+          删除
+        </button>
+      </div>
+      <div class="act-right">
+        <button class="btn-save" id="annEditSave">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          保存
+        </button>
+      </div>
     </div>
   </div>
 </div>
@@ -834,7 +870,7 @@ function renderAnnotations(pageNum){
       bub.addEventListener('mouseleave', () => { pop.style.display = 'none'; });
       bub.addEventListener('click', (e) => {
         e.stopPropagation();
-        showAnnotationEditor(a);
+        showAnnotationEditor(a, bub);
       });
       div.appendChild(bub);
     }
@@ -846,11 +882,26 @@ function renderAllAnnotations(){
   for(let i = 1; i <= pdfDoc.numPages; i++) renderAnnotations(i);
 }
 
-function showAnnotationEditor(a){
-  // 弹出编辑/删除对话框
-  document.getElementById('annEditOverlay').classList.add('show');
+function showAnnotationEditor(a, anchorEl){
   document.getElementById('annEditText').value = a.annotation || '';
   document.getElementById('annEditText').dataset.aid = a.id;
+  annEditOverlay.classList.add('show');
+  const ew = 280, eh = 160;
+  let ex, ey;
+  if(anchorEl){
+    const r = anchorEl.getBoundingClientRect();
+    ex = r.right + 6;
+    ey = r.top - 6;
+    if(ex + ew > window.innerWidth - 8) ex = r.left - ew - 6;
+    if(ey + eh > window.innerHeight - 8) ey = window.innerHeight - eh - 8;
+    if(ey < 8) ey = 8;
+  } else {
+    ex = (window.innerWidth - ew) / 2;
+    ey = (window.innerHeight - eh) / 2;
+  }
+  annEditOverlay.style.left = ex + 'px';
+  annEditOverlay.style.top = ey + 'px';
+  setTimeout(() => annEditText.focus(), 50);
 }
 
 async function renderAnnotation(inputText, selectedRects, pageNum, selectedText){
@@ -1463,7 +1514,7 @@ const annInputClose = document.getElementById('annInputClose');
 const annInputOk = document.getElementById('annInputOk');
 const annEditOverlay = document.getElementById('annEditOverlay');
 const annEditText = document.getElementById('annEditText');
-const annEditCancel = document.getElementById('annEditCancel');
+const annEditClose = document.getElementById('annEditClose');
 const annEditDel = document.getElementById('annEditDel');
 const annEditSave = document.getElementById('annEditSave');
 
@@ -1609,7 +1660,7 @@ annEditSave.addEventListener('click', () => {
   const newText = annEditText.value.trim();
   getAnnotations(lastFileId).then(all => {
     const target = all.find(a => a.id === id);
-    if(target && newText){
+    if(target){
       target.annotation = newText;
       saveAnnotation(target);
       renderAnnotations(target.pageNum);
@@ -1627,7 +1678,7 @@ annEditDel.addEventListener('click', () => {
   });
   annEditOverlay.classList.remove('show');
 });
-annEditCancel.addEventListener('click', () => annEditOverlay.classList.remove('show'));
+annEditClose.addEventListener('click', () => annEditOverlay.classList.remove('show'));
 
 // 翻页/缩放/页面加载后重新渲染批注
 pdfViewer.eventBus.on('scalechanging', () => { setTimeout(renderAllAnnotations, 100); });
