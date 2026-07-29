@@ -334,7 +334,70 @@
   .dark #modalBox .modal-confirm{background:#c0392b;color:#fff}
   .dark #modalBox .modal-confirm:hover{background:#a93226}
   @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+  @keyframes fadeIn{from{opacity:0}to{opacity:1}}
   @keyframes scaleIn{from{opacity:0;transform:scale(.92)}to{opacity:1;transform:scale(1)}}
+
+  /* ── 批注 ── */
+  #annMenu{
+    position:fixed;z-index:80;display:none;gap:4px;
+    background:var(--bar);border:1px solid var(--line);
+    border-radius:var(--radius);box-shadow:0 4px 16px rgba(0,0,0,.1);
+    padding:4px;
+  }
+  #annMenu.show{display:flex}
+  #annMenu button{
+    border:none;background:transparent;padding:5px 12px;
+    border-radius:6px;cursor:pointer;font-size:13px;color:var(--ink);
+    white-space:nowrap;transition:background .12s;
+  }
+  #annMenu button:hover{background:#e8e8ed}
+  .dark #annMenu button:hover{background:#3a3a40}
+  .ann-hl{border-radius:2px;pointer-events:none;mix-blend-mode:multiply;}
+  .dark .ann-hl{mix-blend-mode:screen;opacity:.5}
+  .ann-bub{font-size:13px;line-height:1;filter:drop-shadow(0 1px 2px rgba(0,0,0,.15));}
+  .ann-pop{
+    position:absolute;bottom:100%;left:50%;transform:translateX(-50%);
+    background:var(--bar);border:1px solid var(--line);
+    border-radius:6px;padding:6px 10px;font-size:12px;color:var(--ink);
+    white-space:nowrap;max-width:260px;overflow:hidden;text-overflow:ellipsis;
+    box-shadow:0 2px 8px rgba(0,0,0,.08);pointer-events:none;z-index:10;
+    margin-bottom:4px;
+  }
+  #annInputOverlay,#annEditOverlay{
+    position:fixed;inset:0;background:rgba(0,0,0,.25);z-index:95;
+    display:none;align-items:center;justify-content:center;
+    animation:fadeIn .15s ease;
+  }
+  #annInputOverlay.show,#annEditOverlay.show{display:flex}
+  #annInputBox,#annEditBox{
+    background:var(--bar);border-radius:var(--radius);
+    box-shadow:0 8px 30px rgba(0,0,0,.12);
+    width:360px;max-width:90%;padding:20px;text-align:center;
+    animation:scaleIn .2s ease;
+  }
+  #annInputBox textarea,#annEditBox textarea{
+    width:100%;height:80px;resize:none;border:1px solid var(--line);
+    border-radius:6px;padding:8px 10px;font-size:13px;font-family:inherit;
+    color:var(--ink);background:transparent;box-sizing:border-box;
+    outline:none;transition:border-color .12s;
+  }
+  #annInputBox textarea:focus{border-color:var(--brand)}
+  #annInputBox .ttl,#annEditBox .ttl{font-size:14px;font-weight:500;color:var(--ink);margin-bottom:10px;}
+  #annInputBox .act,#annEditBox .act{display:flex;gap:8px;justify-content:center;margin-top:10px;}
+  #annInputBox .act button,#annEditBox .act button{
+    flex:1;padding:7px 0;border-radius:8px;border:none;
+    font-size:13px;cursor:pointer;transition:all .12s;height:34px;
+  }
+  #annInputBox .btn-cancel,#annEditBox .btn-cancel{background:#f5f5f7;color:var(--ink)}
+  #annInputBox .btn-cancel:hover,#annEditBox .btn-cancel:hover{background:#e8e8ed}
+  #annInputBox .btn-ok{background:var(--brand);color:#fff;font-weight:500}
+  #annInputBox .btn-ok:hover{filter:brightness(.9)}
+  #annEditBox .btn-save{background:var(--brand);color:#fff;font-weight:500}
+  #annEditBox .btn-save:hover{filter:brightness(.9)}
+  #annEditBox .btn-del{background:#c0392b;color:#fff;font-weight:500}
+  #annEditBox .btn-del:hover{background:#a93226}
+  .dark #annInputBox .btn-cancel,.dark #annEditBox .btn-cancel{background:#3a3a40;color:var(--ink)}
+  .dark #annInputBox .btn-cancel:hover,.dark #annEditBox .btn-cancel:hover{background:#4a4a50}
 
   /* ── 打印模式：仅打印 PDF 页面 ── */
   @media print{
@@ -461,6 +524,34 @@
     </div>
   </div>
 </div>
+
+<!-- ── 批注 UI ── -->
+<div id="annMenu">
+  <button id="annCopy">📋 复制</button>
+  <button id="annNew">💬 批注</button>
+</div>
+<div id="annInputOverlay">
+  <div id="annInputBox">
+    <div class="ttl">💬 批注内容</div>
+    <textarea id="annInputText" placeholder="输入批注…"></textarea>
+    <div class="act">
+      <button class="btn-cancel" id="annInputCancel">取消</button>
+      <button class="btn-ok" id="annInputOk">✓ 保存</button>
+    </div>
+  </div>
+</div>
+<div id="annEditOverlay">
+  <div id="annEditBox">
+    <div class="ttl">✏️ 编辑批注</div>
+    <textarea id="annEditText" placeholder="批注内容"></textarea>
+    <div class="act">
+      <button class="btn-cancel" id="annEditCancel">取消</button>
+      <button class="btn-del" id="annEditDel">🗑 删除</button>
+      <button class="btn-save" id="annEditSave">✓ 保存</button>
+    </div>
+  </div>
+</div>
+
 <input type="file" id="fileInput" accept="application/pdf" hidden>
 
 <script>
@@ -534,6 +625,7 @@ const searchClose= document.getElementById('searchClose');
 
 // 最近打开的 PDF 文件名（用于进度记忆）
 let lastFileName = '';
+let lastFileId = '';
 let fitWidth = false;
 const recentFilesEl = document.getElementById('recentFiles');
 
@@ -554,10 +646,15 @@ function saveRecentList(list){
 // IndexedDB：存储文件数据（用于重新打开）
 function openDB(){
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open('PDFReaderData', 1);
+    const req = indexedDB.open('PDFReaderData', 2);
     req.onupgradeneeded = () => {
       if(!req.result.objectStoreNames.contains('files')){
         req.result.createObjectStore('files', { keyPath: 'id' });
+      }
+      if(!req.result.objectStoreNames.contains('annotations')){
+        const as = req.result.createObjectStore('annotations', { keyPath: 'id' });
+        as.createIndex('fileId', 'fileId', { unique: false });
+        as.createIndex('filePage', ['fileId', 'pageNum'], { unique: false });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -593,13 +690,127 @@ async function deleteFileData(id){
   } catch(e){}
 }
 
+// ── 批注 CRUD (IndexedDB annotations store) ──
+async function saveAnnotation(ann){
+  try {
+    const db = await openDB();
+    const tx = db.transaction('annotations', 'readwrite');
+    tx.objectStore('annotations').put(ann);
+    await new Promise(r => { tx.oncomplete = r; });
+    db.close();
+  } catch(e){}
+}
+async function getAnnotations(fileId, pageNum){
+  try {
+    const db = await openDB();
+    const tx = db.transaction('annotations', 'readonly');
+    const store = tx.objectStore('annotations');
+    let items;
+    if(pageNum != null){
+      const range = IDBKeyRange.only([fileId, pageNum]);
+      items = await new Promise(r => { const req = store.index('filePage').getAll(range); req.onsuccess = () => r(req.result); });
+    } else {
+      items = await new Promise(r => { const req = store.index('fileId').getAll(fileId); req.onsuccess = () => r(req.result); });
+    }
+    db.close();
+    return items || [];
+  } catch(e){ return []; }
+}
+async function deleteAnnotation(id){
+  try {
+    const db = await openDB();
+    const tx = db.transaction('annotations', 'readwrite');
+    tx.objectStore('annotations').delete(id);
+    await new Promise(r => { tx.oncomplete = r; });
+    db.close();
+  } catch(e){}
+}
+async function deleteAnnotationsByFile(fileId){
+  const items = await getAnnotations(fileId);
+  for(const a of items) await deleteAnnotation(a.id);
+}
+
+function renderAnnotations(pageNum){
+  // 清除该页现有批注 DOM
+  const pageEl = document.querySelector(`.page[data-page-number="${pageNum}"]`);
+  if(!pageEl || !pdfRawData) return;
+  const old = pageEl.querySelector('.anns');
+  if(old) old.remove();
+  // 从 IndexedDB 读取
+  const fid = lastFileId;
+  if(!fid) return;
+  getAnnotations(fid, pageNum).then(list => {
+    if(list.length === 0) return;
+    if(!pageEl || !pageEl.isConnected) return;
+    const div = document.createElement('div');
+    div.className = 'anns';
+    div.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:1;overflow:hidden;';
+    // 获取页面实际尺寸
+    const pw = pageEl.offsetWidth;
+    const ph = pageEl.offsetHeight;
+    if(pw < 1 || ph < 1) return;
+    for(const a of list){
+      // 高亮 rects
+      for(const r of a.rects){
+        const hl = document.createElement('div');
+        hl.className = 'ann-hl';
+        hl.style.cssText = `position:absolute;left:${r.left*pw}px;top:${r.top*ph}px;width:${r.width*pw}px;height:${r.height*ph}px;background:rgba(255,212,0,.35);pointer-events:none;border-radius:2px;`;
+        div.appendChild(hl);
+      }
+      // 💬 气泡
+      const bub = document.createElement('span');
+      bub.className = 'ann-bub';
+      bub.dataset.aid = a.id;
+      bub.title = a.annotation || '';
+      bub.style.cssText = `position:absolute;left:${a.bubX*pw}px;top:${a.bubY*ph}px;cursor:pointer;pointer-events:auto;z-index:3;`;
+      bub.textContent = '💬';
+      // hover 显示批注
+      const pop = document.createElement('div');
+      pop.className = 'ann-pop';
+      pop.style.cssText = 'position:absolute;bottom:100%;left:50%;transform:translateX(-50%);display:none;';
+      pop.textContent = a.annotation || '';
+      bub.appendChild(pop);
+      bub.addEventListener('mouseenter', () => { pop.style.display = 'block'; });
+      bub.addEventListener('mouseleave', () => { pop.style.display = 'none'; });
+      bub.addEventListener('click', (e) => {
+        e.stopPropagation();
+        showAnnotationEditor(a);
+      });
+      div.appendChild(bub);
+    }
+    pageEl.appendChild(div);
+  });
+}
+function renderAllAnnotations(){
+  if(!pdfDoc || !lastFileId) return;
+  for(let i = 1; i <= pdfDoc.numPages; i++) renderAnnotations(i);
+}
+
+function showAnnotationEditor(a){
+  // 弹出编辑/删除对话框
+  document.getElementById('annEditOverlay').classList.add('show');
+  document.getElementById('annEditText').value = a.annotation || '';
+  document.getElementById('annEditText').dataset.aid = a.id;
+}
+
+function renderAnnotation(inputText, selectedRects, pageNum, selectedText){
+  const a = {
+    id: Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+    fileId: lastFileId,
+    pageNum,
+    text: selectedText,
+    annotation: inputText || '',
+    rects: selectedRects.map(r => ({ left: r.left, top: r.top, width: r.width, height: r.height })),
+    bubX: Math.min(...selectedRects.map(r => r.left + r.width/2)),
+    bubY: Math.min(...selectedRects.map(r => r.top)),
+    color: '#FFD700',
+    createdAt: Date.now()
+  };
+  saveAnnotation(a);
+  renderAnnotations(pageNum);
+}
+
 function renderRecentFiles(list){
-  if(!recentFilesEl) return;
-  if(!list || list.length === 0){
-    recentFilesEl.innerHTML = '';
-    return;
-  }
-  const now = Date.now();
   let html = '<div class="rf-title">最近打开</div>';
   for(const item of list){
     const diff = now - item.time;
@@ -867,6 +1078,7 @@ async function loadFile(file, options = {}){
     updatePageInfo();
     // V1.1
     lastFileName = file.name || '';
+    lastFileId = options.historyId || (Date.now().toString(36) + Math.random().toString(36).slice(2,6));
     document.title = file.name || '云轩 PDF 阅读器 · 网页版';
     loadOutline();
     // 保存到最近打开记录（历史记录重开时只更新时间，不重复写文件数据）
@@ -915,6 +1127,8 @@ function goHome(){
   pdfDoc = null;
   pdfRawData = null;
   lastFileName = '';
+  lastFileId = '';
+  clearAnnotations();
   document.title = '云轩 PDF 阅读器 · 网页版';
   empty.style.display = '';
   const footer = document.getElementById('appFooter');
@@ -1165,14 +1379,165 @@ const modalCancel  = document.getElementById('modalCancel');
 modalConfirm.addEventListener('click', async () => {
   modalOverlay.classList.remove('show');
   const list = getRecentList();
-  for(const item of list) await deleteFileData(item.id);
+  for(const item of list){
+    await deleteFileData(item.id);
+    await deleteAnnotationsByFile(item.id);
+  }
   saveRecentList([]);
   renderRecentFiles([]);
+  clearAnnotations();
 });
 modalCancel.addEventListener('click', () => modalOverlay.classList.remove('show'));
 modalOverlay.addEventListener('click', (e) => {
   if(e.target === modalOverlay) modalOverlay.classList.remove('show');
 });
+
+// ── 批注交互 ──
+const annMenu = document.getElementById('annMenu');
+const annCopy = document.getElementById('annCopy');
+const annNew = document.getElementById('annNew');
+const annInputOverlay = document.getElementById('annInputOverlay');
+const annInputText = document.getElementById('annInputText');
+const annInputCancel = document.getElementById('annInputCancel');
+const annInputOk = document.getElementById('annInputOk');
+const annEditOverlay = document.getElementById('annEditOverlay');
+const annEditText = document.getElementById('annEditText');
+const annEditCancel = document.getElementById('annEditCancel');
+const annEditDel = document.getElementById('annEditDel');
+const annEditSave = document.getElementById('annEditSave');
+
+let annSelectedRects = null;
+let annSelectedText = '';
+let annSelectedPage = 0;
+
+// 隐藏浮动菜单
+function hideAnnMenu(){ 
+  annMenu.classList.remove('show'); 
+  annSelectedRects = null; 
+  annSelectedText = ''; 
+}
+
+// 鼠标选中文字 → 显示浮动菜单
+document.addEventListener('mouseup', (e) => {
+  const sel = window.getSelection();
+  if(!sel || sel.isCollapsed || !sel.toString().trim()) {
+    // 点击空白区域隐藏菜单
+    if(!e.target.closest('#annMenu')) hideAnnMenu();
+    return;
+  }
+  // 只处理在 viewer 内的选中
+  if(!e.target.closest('.pdfViewer')) return;
+  const text = sel.toString().trim();
+  if(text.length < 1 || text.length > 500) return;
+  // 获取选中范围的矩形
+  const range = sel.getRangeAt(0);
+  if(!range) return;
+  const rects = Array.from(range.getClientRects()).filter(r => r.width > 2 && r.height > 2);
+  if(rects.length === 0) return;
+  // 定位到页面坐标（百分比）
+  const pageEl = e.target.closest('.page');
+  if(!pageEl) return;
+  const pageNum = parseInt(pageEl.dataset.pageNumber, 10);
+  if(!pageNum) return;
+  const pr = pageEl.getBoundingClientRect();
+  if(pr.width < 1) return;
+  const rectsPct = rects.map(r => ({
+    left: (r.left - pr.left) / pr.width,
+    top: (r.top - pr.top) / pr.height,
+    width: r.width / pr.width,
+    height: r.height / pr.height
+  }));
+  annSelectedRects = rectsPct;
+  annSelectedText = text;
+  annSelectedPage = pageNum;
+  // 定位浮动菜单
+  const lastR = rects[rects.length - 1];
+  let mx = lastR.right + 6;
+  let my = lastR.top - 4;
+  const menuW = 120;
+  if(mx + menuW > window.innerWidth) mx = lastR.left - menuW - 6;
+  if(my < 4) my = lastR.bottom + 4;
+  annMenu.style.left = mx + 'px';
+  annMenu.style.top = my + 'px';
+  annMenu.classList.add('show');
+});
+
+// 复制
+annCopy.addEventListener('click', () => {
+  if(annSelectedText){
+    navigator.clipboard.writeText(annSelectedText).catch(() => {});
+  }
+  hideAnnMenu();
+});
+
+// 新建批注
+annNew.addEventListener('click', () => {
+  if(!annSelectedRects) return;
+  annInputOverlay.classList.add('show');
+  annInputText.value = '';
+  annInputText.focus();
+});
+
+// 取消输入
+annInputCancel.addEventListener('click', () => {
+  annInputOverlay.classList.remove('show');
+  hideAnnMenu();
+});
+
+// 确认保存
+annInputOk.addEventListener('click', () => {
+  const ann = annInputText.value.trim();
+  if(!ann || !annSelectedRects) return;
+  renderAnnotation(ann, annSelectedRects, annSelectedPage, annSelectedText);
+  annInputOverlay.classList.remove('show');
+  hideAnnMenu();
+});
+
+// 编辑批注：保存修改
+annEditSave.addEventListener('click', () => {
+  const id = annEditText.dataset.aid;
+  if(!id) return;
+  const newText = annEditText.value.trim();
+  getAnnotations(lastFileId).then(all => {
+    const target = all.find(a => a.id === id);
+    if(target && newText){
+      target.annotation = newText;
+      saveAnnotation(target);
+      renderAnnotations(target.pageNum);
+    }
+  });
+  annEditOverlay.classList.remove('show');
+});
+// 编辑批注：删除
+annEditDel.addEventListener('click', () => {
+  const id = annEditText.dataset.aid;
+  if(!id) return;
+  deleteAnnotation(id).then(() => {
+    // 找到对应页码重新渲染
+    for(let i = 1; pdfDoc && i <= pdfDoc.numPages; i++) renderAnnotations(i);
+  });
+  annEditOverlay.classList.remove('show');
+});
+annEditCancel.addEventListener('click', () => annEditOverlay.classList.remove('show'));
+
+// 翻页/缩放/页面加载后重新渲染批注
+pdfViewer.eventBus.on('scalechanging', () => { setTimeout(renderAllAnnotations, 100); });
+pdfViewer.eventBus.on('pagechanging', () => { setTimeout(renderAllAnnotations, 100); });
+pdfViewer.eventBus.on('pagesloaded', () => { setTimeout(renderAllAnnotations, 200); });
+
+// 清除批注（goHome 时）
+function clearAnnotations(){
+  document.querySelectorAll('.anns').forEach(el => el.remove());
+}
+
+// 打开新文件时先渲染已有批注
+const origLoadFile = loadFile;
+// 在 loadFile 完成后自动渲染批注
+pdfViewer.eventBus.on('pagesloaded', () => { renderAllAnnotations(); });
+
+// 在 goHome 中清除批注（hook 进去）
+const origGoHome = goHome;
+// 附加到 goHome 里
 
 // initial
 document.getElementById('footerYear').textContent = new Date().getFullYear();
