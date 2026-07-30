@@ -1486,34 +1486,20 @@ dmBtn.addEventListener('click', ()=> toggleDark());
 try { if(localStorage.getItem('pdfDarkMode') === '1') toggleDark(true); } catch(e) {}
 
 // ── 打印 ──
-let printState = null;
-window.addEventListener('beforeprint', () => {
-  // 预览时强制白色背景/移除暗色 filter（由 @media print CSS 处理）
-});
-window.addEventListener('afterprint', () => {
-  if(!printState) return;
-  pdfViewer.currentScaleValue = printState.scale || 1;
-  isTwoPage = printState.twoPage;
-  applySpread();
-  printState = null;
-});
 printBtn.addEventListener('click', async () => {
   if(!pdfDoc){ showError('请先打开 PDF 文件'); return; }
-  // 1. 准备 viewer：单页 + 100% 缩放
-  printState = { twoPage: isTwoPage, scale: pdfViewer.currentScaleValue };
-  pdfViewer.spreadMode = SpreadMode.NONE;
-  pdfViewer.currentScaleValue = 1;
-  // 2. 等待 viewer 初始化新布局下的所有页面视图
-  await new Promise(r => setTimeout(r, 100));
-  // 3. 强制所有页面并行渲染，不改变当前页位置
-  const pageViews = pdfViewer._pages || [];
-  await Promise.allSettled(pageViews.map(pv => {
-    if(pv && typeof pv.draw === 'function') return pv.draw();
+  // 1. 不修改 viewer（不改布局/缩放），避免页面重建空白
+  // 2. 强制所有未渲染的页面视图立即渲染
+  const views = pdfViewer._pages || [];
+  await Promise.allSettled(views.map(v => {
+    if(v && typeof v.draw === 'function') return v.draw();
     return Promise.resolve();
   }));
-  // 4. 叠加修正带和批注
+  // 3. 修正带和批注
   renderAllAnnotations();
-  // 5. 唤出系统打印预览
+  // 4. 等待浏览器完成绘制
+  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+  // 5. 系统打印预览
   window.print();
 });
 
