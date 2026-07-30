@@ -1496,8 +1496,16 @@ printBtn.addEventListener('click', async ()=>{
   printState = { twoPage: isTwoPage, scale: pdfViewer.currentScaleValue };
   pdfViewer.spreadMode = SpreadMode.NONE;
   pdfViewer.currentScaleValue = 1;
-  // 等待所有页面渲染完成后再唤出打印预览
-  await new Promise(r => setTimeout(r, 150));
+  // 逐页遍历强制渲染所有页面（pdf.js 延迟渲染非可视页）
+  const currentPage = pdfViewer.currentPageNumber;
+  for(let i = 1; i <= pdfDoc.numPages; i++){
+    pdfViewer.currentPageNumber = i;
+    await new Promise(r => setTimeout(r, 30));
+  }
+  // 回到当前页并等渲染完成（不覆盖进度记录）
+  pdfViewer.currentPageNumber = currentPage;
+  await new Promise(r => setTimeout(r, 100));
+  // 修正带和高亮也能打印
   renderAllAnnotations();
   window.print();
 });
