@@ -1486,35 +1486,63 @@ dmBtn.addEventListener('click', ()=> toggleDark());
 try { if(localStorage.getItem('pdfDarkMode') === '1') toggleDark(true); } catch(e) {}
 
 // ── 打印 ──
-let printState = null;
-window.addEventListener('beforeprint', () => {
-  // 预览时强制白色背景/移除暗色 filter（由 @media print CSS 处理）
-});
-window.addEventListener('afterprint', () => {
-  if(!printState) return;
-  pdfViewer.currentScaleValue = printState.scale || 1;
-  isTwoPage = printState.twoPage;
-  applySpread();
-  printState = null;
-});
 printBtn.addEventListener('click', async () => {
-  if(!pdfDoc){ showError('请先打开 PDF 文件'); return; }
-  // 1. 准备 viewer：单页 + 100% 缩放
-  printState = { twoPage: isTwoPage, scale: pdfViewer.currentScaleValue };
-  pdfViewer.spreadMode = SpreadMode.NONE;
-  pdfViewer.currentScaleValue = 1;
-  // 2. 等待 viewer 初始化新布局下的所有页面视图
-  await new Promise(r => setTimeout(r, 100));
-  // 3. 强制所有页面并行渲染，不改变当前页位置
-  const pageViews = pdfViewer._pages || [];
-  await Promise.allSettled(pageViews.map(pv => {
-    if(pv && typeof pv.draw === 'function') return pv.draw();
-    return Promise.resolve();
-  }));
-  // 4. 叠加修正带和批注
-  renderAllAnnotations();
-  // 5. 唤出系统打印预览
-  window.print();
+  if(!pdfRawData){ showError('请先打开 PDF 文件'); return; }
+  printBtn.disabled = true;
+  printBtn.textContent = '修改 PDF...';
+  try {
+    // 1. 用 pdf-lib 载入原始 PDF（内存副本，不修改源文件）
+    const { PDFDocument, rgb } = await import('./node_modules/pdf-lib/dist/pdf-lib.esm.js');
+    const srcPdf = await PDFDocument.load(pdfRawData.slice(0));
+    const pages = srcPdf.getPages();
+    // 2. 从缓存读取修正带/批注，写入 PDF 页面
+    const cache = getCachedAnnotations();
+    if(cache){
+      for(const pageNum in cache){
+        const anns = cache[pageNum];
+        const pi = parseInt(pageNum) - 1;
+        if(pi < 0 || pi >= pages.length) continue;
+        const pg = pages[pi];
+        const { width, height } = pg.getSize();
+        for(const a of anns){
+          for(const r of a.rects){
+            const x = r.left * width;
+            const y = (1 - r.top - r.height) * height;
+            const w = r.width * width;
+            const h = r.height * height;
+            if(a.type === 'cover'){
+              pg.drawRectangle({ x, y, width: w, height: h, color: rgb(1, 1, 1) });
+            } else {
+              pg.drawRectangle({ x, y, width: w, height: h, color: rgb(1, 0.83, 0), opacity: 0.35 });
+            }
+          }
+        }
+      }
+    }
+    // 3. 保存为修改版 PDF
+    printBtn.textContent = '生成中...';
+    const pdfBytes = await srcPdf.save();
+    const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    // 4. 隐藏 iframe 加载 → 浏览器原生打印
+    const iframe = document.createElement('iframe');
+    iframe.style.cssText = 'position:fixed;right:100%;bottom:100%;width:0;height:0;border:0;';
+    iframe.src = url;
+    iframe.onload = () => {
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+      printBtn.disabled = false;
+      printBtn.textContent = '打印';
+    };
+    document.body.appendChild(iframe);
+    // 5. 打印后清理
+    const cleanup = () => { document.body.removeChild(iframe); URL.revokeObjectURL(url); };
+    iframe.contentWindow.addEventListener('afterprint', cleanup, { once: true });
+  } catch(e){
+    showError('打印失败：' + (e?.message || e));
+    printBtn.disabled = false;
+    printBtn.textContent = '打印';
+  }
 });
 
 // ── 搜索 ──
