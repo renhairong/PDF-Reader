@@ -1330,7 +1330,13 @@ async function loadFile(file, options = {}){
     updatePageInfo();
     // V1.1
     lastFileName = file.name || '';
-    lastFileId = options.historyId || (Date.now().toString(36) + Math.random().toString(36).slice(2,6));
+    // 确定 fileId：历史记录复用旧 ID，新文件检查最近列表是否同名，避免 ID 不一致导致批注丢失
+    if(options.historyId){
+      lastFileId = options.historyId;
+    } else {
+      const existingEntry = getRecentList().find(i => i.name === (file.name || '未命名.pdf'));
+      lastFileId = existingEntry ? existingEntry.id : (Date.now().toString(36) + Math.random().toString(36).slice(2,6));
+    }
     // 预加载批注缓存（避免打开文件时异步读 IDB 导致闪烁）
     loadAnnotationsCache(lastFileId).then(() => setTimeout(renderAllAnnotations, 0));
     document.title = file.name || '云轩 PDF 阅读器 · 网页版';
