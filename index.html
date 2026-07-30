@@ -991,7 +991,15 @@ function renderRecentFiles(list){
 
 function loadRecentFiles(){
   // 从 localStorage 读列表（轻量可靠），不依赖 IndexedDB
-  const list = getRecentList();
+  let list = getRecentList();
+  // 启动时去重：同名文件只保留最近的一条
+  const seen = new Set();
+  list = list.filter(item => {
+    if(seen.has(item.name)) return false;
+    seen.add(item.name);
+    return true;
+  });
+  saveRecentList(list);
   // 异步清理已不存在的 IndexedDB 记录
   scheduleCleanup(list);
   renderRecentFiles(list);
@@ -1018,10 +1026,19 @@ function scheduleCleanup(list){
 // 保存最近打开记录
 async function saveRecentFile(name, data){
   const list = getRecentList();
-  // 生成唯一 ID（时间戳 + 短随机）
-  const id = Date.now().toString(36) + Math.random().toString(36).slice(2,6);
-  // 插入到最前面
-  list.unshift({ id, name: name || '未命名.pdf', time: Date.now() });
+  const finalName = name || '未命名.pdf';
+  // 同名文件：复用现有记录，移到首位 + 更新时间，避免重复条目
+  const existingIdx = list.findIndex(i => i.name === finalName);
+  let id;
+  if(existingIdx >= 0){
+    id = list[existingIdx].id;
+    list.splice(existingIdx, 1);
+    list.unshift({ id, name: finalName, time: Date.now() });
+  } else {
+    // 新文件：生成唯一 ID（时间戳 + 短随机）
+    id = Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+    list.unshift({ id, name: finalName, time: Date.now() });
+  }
   // 截断到 MAX_RECENT 条，多余的删除 IndexedDB 数据
   const removed = list.splice(MAX_RECENT);
   saveRecentList(list);
