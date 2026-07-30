@@ -1492,12 +1492,17 @@ window.addEventListener('afterprint', ()=>{
 });
 printBtn.addEventListener('click', async ()=>{
   if(!pdfDoc){ showError('请先打开 PDF 文件'); return; }
-  // 在点击打印按钮时就准备好 viewer：单页 + 缩放 100% + 等待渲染完成
   printState = { twoPage: isTwoPage, scale: pdfViewer.currentScaleValue };
   pdfViewer.spreadMode = SpreadMode.NONE;
   pdfViewer.currentScaleValue = 1;
-  // 等待所有页面渲染完成后再唤出打印预览
-  await new Promise(r => setTimeout(r, 150));
+  // 等待 viewer 完成新布局下的页面初始化
+  await new Promise(r => setTimeout(r, 100));
+  // 强制所有页面立即渲染，不改变当前页位置
+  const pageViews = pdfViewer._pages || [];
+  await Promise.all(pageViews.map(pv => {
+    if(pv && typeof pv.draw === 'function') return pv.draw().catch(() => {});
+    return Promise.resolve();
+  }));
   renderAllAnnotations();
   window.print();
 });
