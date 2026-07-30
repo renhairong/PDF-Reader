@@ -1483,11 +1483,10 @@ let printState = null;
 window.addEventListener('beforeprint', ()=>{
   if(!pdfDoc) return;
   printState = { twoPage: isTwoPage, scale: pdfViewer.currentScaleValue };
-  // 打印时强制每张纸一页，并使用 100% 原始比例。
+  // 打印时强制单页布局；不强制改 scale，避免异步重渲染导致打印空白
   pdfViewer.spreadMode = SpreadMode.NONE;
-  pdfViewer.currentScaleValue = 1;
-  // 立即渲染批注和修正带
-  renderAllAnnotations();
+  // 等待布局更新后再渲染批注（让打印时拿到正确 DOM）
+  requestAnimationFrame(() => renderAllAnnotations());
 });
 window.addEventListener('afterprint', ()=>{
   if(!printState) return;
