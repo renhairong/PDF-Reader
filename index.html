@@ -1486,59 +1486,27 @@ dmBtn.addEventListener('click', ()=> toggleDark());
 try { if(localStorage.getItem('pdfDarkMode') === '1') toggleDark(true); } catch(e) {}
 
 // ── 打印 ──
+let printState = null;
+window.addEventListener('beforeprint', ()=>{
+  // 不做任何 viewer 修改（准备工作在按钮点击时完成）
+});
+window.addEventListener('afterprint', ()=>{
+  if(!printState) return;
+  pdfViewer.currentScaleValue = printState.scale || 1;
+  isTwoPage = printState.twoPage;
+  applySpread();
+  printState = null;
+});
 printBtn.addEventListener('click', async ()=>{
   if(!pdfDoc){ showError('请先打开 PDF 文件'); return; }
-  // 先打开空窗口（用户手势中执行，不会被弹窗拦截）
-  const printWin = window.open('', '_blank');
-  if(!printWin){ showError('弹窗被拦截，请允许弹出窗口'); return; }
-  printWin.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>打印</title><style>@page{margin:0}body{margin:0;background:#fff}img{display:block;width:100%;max-width:210mm;margin:0 auto;page-break-after:always}</style></head><body><p style="text-align:center;margin-top:40vh;color:#666">正在准备打印...</p></body></html>');
-  printWin.document.close();
-  // 禁用打印按钮防止重复点击
-  printBtn.disabled = true;
-  printBtn.textContent = '准备打印...';
-  const printScale = 1.5;
-  const totalPages = pdfDoc.numPages;
-  const pageImages = [];
-  try {
-    for(let i = 1; i <= totalPages; i++){
-      const page = await pdfDoc.getPage(i);
-      const viewport = page.getViewport({ scale: printScale });
-      const canvas = document.createElement('canvas');
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
-      const ctx = canvas.getContext('2d');
-      await page.render({ canvasContext: ctx, viewport }).promise;
-      // 叠加修正带和批注
-      const anns = getCachedAnnotations();
-      const pageAnns = anns ? anns[i] || [] : [];
-      for(const a of pageAnns){
-        for(const r of a.rects){
-          const x = r.left * canvas.width;
-          const y = r.top * canvas.height;
-          const w = r.width * canvas.width;
-          const h = r.height * canvas.height;
-          if(a.type === 'cover'){
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(x, y, w, h);
-          } else {
-            ctx.fillStyle = 'rgba(255,212,0,0.35)';
-            ctx.fillRect(x, y, w, h);
-          }
-        }
-      }
-      pageImages.push(canvas.toDataURL('image/jpeg', 0.85));
-      printBtn.textContent = `准备打印 (${i}/${totalPages})...`;
-      if(i % 10 === 0) await new Promise(r => setTimeout(r, 0));
-    }
-  } catch(e){ showError('打印准备失败：' + e.message); printBtn.disabled = false; printBtn.textContent = '打印'; return; }
-  // 写入所有渲染好的页面
-  printWin.document.body.innerHTML = pageImages.map(src => `<img src="${src}">`).join('');
-  // 等待图片加载
-  await new Promise(r => setTimeout(r, 500));
-  printWin.print();
-  printBtn.disabled = false;
-  printBtn.textContent = '打印';
-  printWin.onafterprint = () => printWin.close();
+  // 在点击打印按钮时就准备好 viewer：单页 + 缩放 100% + 等待渲染完成
+  printState = { twoPage: isTwoPage, scale: pdfViewer.currentScaleValue };
+  pdfViewer.spreadMode = SpreadMode.NONE;
+  pdfViewer.currentScaleValue = 1;
+  // 等待所有页面渲染完成后再唤出打印预览
+  await new Promise(r => setTimeout(r, 150));
+  renderAllAnnotations();
+  window.print();
 });
 
 // ── 搜索 ──
