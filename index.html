@@ -354,11 +354,12 @@
   .dark #annMenu button:hover{background:#3a3a40}
   .ann-hl{border-radius:2px;pointer-events:none;mix-blend-mode:multiply;}
   .dark .ann-hl{mix-blend-mode:screen;opacity:.5}
-  .ann-cvr{pointer-events:auto;cursor:default;border-radius:1px;}
-  .ann-cvr:hover::after{
-    content:'撤回';position:absolute;left:50%;top:-24px;transform:translateX(-50%);
+  .ann-cvr{pointer-events:auto;cursor:default;}
+  .ann-cvr-pop{
+    display:none;
+    position:absolute;left:50%;bottom:calc(100% + 4px);transform:translateX(-50%);
     background:var(--bar);border:1px solid var(--line);
-    border-radius:6px;padding:3px 8px;font-size:11px;color:var(--brand);
+    border-radius:6px;padding:3px 9px;font-size:11px;color:var(--brand);
     white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.08);z-index:10;
     pointer-events:none;line-height:1.4;
   }
@@ -908,10 +909,14 @@ function renderAnnotations(pageNum){
         const hl = document.createElement('div');
         if(isCover){
           hl.className = 'ann-cvr';
-          hl.style.cssText = `position:absolute;left:${r.left*pw}px;top:${r.top*ph}px;width:${r.width*pw}px;height:${r.height*ph}px;background:#fff;border:1px solid #e0e0e0;`;
-          // 修正带悬停显示撤回，点击删除
-          hl.addEventListener('mouseenter', () => { hl.classList.add('hover'); });
-          hl.addEventListener('mouseleave', () => { hl.classList.remove('hover'); });
+          hl.style.cssText = `position:absolute;left:${r.left*pw}px;top:${r.top*ph}px;width:${r.width*pw}px;height:${r.height*ph}px;background:#fff;`;
+          // 撤回按钮（实际 DOM 元素，避免被 overflow:hidden 裁掉）
+          const pop = document.createElement('div');
+          pop.className = 'ann-cvr-pop';
+          pop.textContent = '↩ 撤回';
+          hl.appendChild(pop);
+          hl.addEventListener('mouseenter', () => { pop.style.display = 'block'; });
+          hl.addEventListener('mouseleave', () => { pop.style.display = 'none'; });
           hl.addEventListener('click', (e) => {
             e.stopPropagation();
             deleteAnnotation(a.id).then(() => {
