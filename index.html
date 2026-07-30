@@ -481,56 +481,32 @@
   .dark #annEditBox .btn-del{color:#e57373;border-color:#4a2c2a !important}
   .dark #annEditBox .btn-del:hover{background:#3a2828}
 
-  /* settings */
-  #settingsOverlay{
-    position:fixed;inset:0;background:rgba(0,0,0,.25);z-index:95;
-    display:none;align-items:center;justify-content:center;
-    animation:fadeIn .15s ease;
+  /* settings dropdown menu */
+  #settingsMenu{
+    position:fixed;z-index:90;display:none;
+    min-width:200px;padding:6px;
+    background:var(--bar);border:1px solid var(--line);
+    border-radius:10px;
+    box-shadow:0 4px 20px rgba(0,0,0,.10),0 1px 4px rgba(0,0,0,.04);
+    animation:scaleIn .15s ease;
+    transform-origin:top right;
   }
-  #settingsOverlay.show{display:flex}
-  #settingsBox{
-    background:var(--bar);border-radius:var(--radius);
-    box-shadow:0 8px 30px rgba(0,0,0,.12);
-    width:340px;max-width:90%;overflow:hidden;
-    animation:scaleIn .2s ease;
+  #settingsMenu.show{display:block}
+  #settingsMenu .menu-item{
+    display:flex;align-items:center;gap:10px;
+    width:100%;padding:7px 10px;
+    border:none;background:transparent;cursor:pointer;
+    border-radius:6px;font-size:13px;color:var(--ink);
+    text-align:left;line-height:1.4;user-select:none;
+    transition:background .12s;
   }
-  #settingsBox .head{
-    display:flex;align-items:center;justify-content:space-between;
-    padding:10px 10px 10px 14px;
-    border-bottom:1px solid var(--line);
-    font-size:13px;font-weight:500;color:var(--ink);user-select:none;
+  #settingsMenu .menu-item:hover{background:#e8e8ed}
+  .dark #settingsMenu .menu-item:hover{background:#3a3a40}
+  #settingsMenu .menu-item .check{
+    width:14px;height:14px;flex-shrink:0;
+    color:var(--brand);opacity:0;transition:opacity .12s;
   }
-  #settingsBox .head svg{vertical-align:middle;margin-right:5px}
-  .settings-close{
-    width:24px;height:24px;border-radius:6px;border:none;
-    background:transparent;color:var(--sub);cursor:pointer;
-    display:flex;align-items:center;justify-content:center;
-    transition:all .12s;font-size:13px;line-height:1;
-  }
-  .settings-close:hover{background:#e8e8ed;color:var(--ink)}
-  .dark .settings-close:hover{background:#3a3a40}
-  #settingsBox .body{padding:14px;}
-  #settingsBox .row{
-    display:flex;align-items:center;justify-content:space-between;
-    padding:8px 0;
-  }
-  #settingsBox .row-label{font-size:13px;color:var(--ink);user-select:none;}
-  .switch{position:relative;display:inline-block;width:36px;height:20px;cursor:pointer;}
-  .switch input{display:none}
-  .switch-slider{
-    position:absolute;inset:0;background:#c8c8cc;border-radius:10px;
-    transition:background .2s;
-  }
-  .switch-slider::before{
-    content:'';position:absolute;left:2px;bottom:2px;
-    width:16px;height:16px;border-radius:50%;background:#fff;
-    box-shadow:0 1px 3px rgba(0,0,0,.15);
-    transition:transform .2s;
-  }
-  .switch input:checked + .switch-slider{background:var(--brand)}
-  .switch input:checked + .switch-slider::before{transform:translateX(16px)}
-  .dark .switch-slider{background:#555}
-  .dark .switch input:checked + .switch-slider{background:#66bb6a}
+  #settingsMenu .menu-item.active .check{opacity:1}
   .hide-pdf-annotations .annotationLayer{display:none!important}
 
   /* ── 打印模式：仅打印 PDF 页面 ── */
@@ -706,22 +682,11 @@
 </div>
 
 <!-- ── 设置 ── -->
-<div id="settingsOverlay">
-  <div id="settingsBox">
-    <div class="head">
-      <span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>设置</span>
-      <button class="settings-close" id="settingsClose">✕</button>
-    </div>
-    <div class="body">
-      <div class="row">
-        <div class="row-label">显示 PDF 内嵌批注</div>
-        <label class="switch">
-          <input type="checkbox" id="showPdfAnnotations">
-          <span class="switch-slider"></span>
-        </label>
-      </div>
-    </div>
-  </div>
+<div id="settingsMenu">
+  <button class="menu-item" id="togglePdfAnnotations">
+    <svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+    <span>显示 PDF 内嵌批注</span>
+  </button>
 </div>
 
 <input type="file" id="fileInput" accept="application/pdf" hidden>
@@ -1760,26 +1725,49 @@ annEditClose.addEventListener('click', () => annEditOverlay.classList.remove('sh
 
 // ── 设置 ──
 const settingsBtn = document.getElementById('settingsBtn');
-const settingsOverlay = document.getElementById('settingsOverlay');
-const settingsClose = document.getElementById('settingsClose');
-const showPdfAnnotations = document.getElementById('showPdfAnnotations');
+const settingsMenu = document.getElementById('settingsMenu');
+const togglePdfAnnotations = document.getElementById('togglePdfAnnotations');
+function applyPdfAnnotations(visible){
+  document.documentElement.classList.toggle('hide-pdf-annotations', !visible);
+  togglePdfAnnotations.classList.toggle('active', visible);
+  try { localStorage.setItem('pdfShowAnnotations', visible ? '1' : ''); } catch(e){}
+}
 // 读取已保存的偏好
-try { showPdfAnnotations.checked = localStorage.getItem('pdfShowAnnotations') === '1'; } catch(e){}
-// 默认关闭，立即应用
-(function(){
-  const show = showPdfAnnotations.checked;
-  document.documentElement.classList.toggle('hide-pdf-annotations', !show);
-})();
-settingsBtn.addEventListener('click', () => settingsOverlay.classList.add('show'));
-settingsClose.addEventListener('click', () => settingsOverlay.classList.remove('show'));
-settingsOverlay.addEventListener('click', (e) => {
-  if(e.target === settingsOverlay) settingsOverlay.classList.remove('show');
+try {
+  const saved = localStorage.getItem('pdfShowAnnotations') === '1';
+  applyPdfAnnotations(saved);
+} catch(e){ applyPdfAnnotations(false); }
+function toggleSettingsMenu(){
+  if(settingsMenu.classList.contains('show')){
+    settingsMenu.classList.remove('show');
+    return;
+  }
+  // 定位到设置按钮下方
+  const r = settingsBtn.getBoundingClientRect();
+  settingsMenu.style.top = (r.bottom + 6) + 'px';
+  settingsMenu.style.right = (window.innerWidth - r.right) + 'px';
+  settingsMenu.classList.add('show');
+}
+settingsBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  toggleSettingsMenu();
 });
-showPdfAnnotations.addEventListener('change', () => {
-  const on = showPdfAnnotations.checked;
-  document.documentElement.classList.toggle('hide-pdf-annotations', !on);
-  try { localStorage.setItem('pdfShowAnnotations', on ? '1' : ''); } catch(e){}
+togglePdfAnnotations.addEventListener('click', (e) => {
+  e.stopPropagation();
+  const visible = !togglePdfAnnotations.classList.contains('active');
+  applyPdfAnnotations(visible);
+  settingsMenu.classList.remove('show');
 });
+// 点击其他区域关闭
+document.addEventListener('click', (e) => {
+  if(!settingsMenu.classList.contains('show')) return;
+  if(!e.target.closest('#settingsMenu, #settingsBtn')){
+    settingsMenu.classList.remove('show');
+  }
+});
+window.addEventListener('scroll', () => {
+  if(settingsMenu.classList.contains('show')) settingsMenu.classList.remove('show');
+}, true);
 
 // 翻页/缩放/页面加载后重新渲染批注
 pdfViewer.eventBus.on('scalechanging', () => { setTimeout(renderAllAnnotations, 100); });
