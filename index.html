@@ -1536,12 +1536,15 @@ printBtn.addEventListener('click', async () => {
     iframe.onload = () => {
       iframe.contentWindow.focus();
       iframe.contentWindow.print();
-      // 打印预览弹框弹出，恢复按钮
-      restoreBtn();
     };
     document.body.appendChild(iframe);
-    // 5. 打印完成后清理
-    const cleanup = () => { document.body.removeChild(iframe); URL.revokeObjectURL(url); printing = false; };
+    // 5. 打印完成后清理 + 恢复按钮
+    const cleanup = () => {
+      document.body.removeChild(iframe);
+      URL.revokeObjectURL(url);
+      printing = false;
+      restoreBtn();
+    };
     iframe.contentWindow.addEventListener('afterprint', cleanup, { once: true });
   } catch(e){
     showError('打印失败：' + (e?.message || e));
