@@ -1311,9 +1311,9 @@ async function loadFile(file, options = {}){
     pdfDoc = await pdfjsLib.getDocument({
       data: pdfData,
       // 启用 CJK 字符映射 + 标准字体数据 + 系统字体回退，解决中文/部分字符无法显示的问题
-      cMapUrl: './node_modules/pdfjs-dist/cmaps/',
+      cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/cmaps/',
       cMapPacked: true,
-      standardFontDataUrl: './node_modules/pdfjs-dist/standard_fonts/',
+      standardFontDataUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/standard_fonts/',
       useSystemFonts: true,
     }).promise;
     pdfViewer.setDocument(pdfDoc);
