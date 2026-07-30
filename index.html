@@ -1540,12 +1540,16 @@ printBtn.addEventListener('click', async () => {
     document.body.appendChild(iframe);
     // 5. 打印完成后清理 + 恢复按钮
     const cleanup = () => {
+      if(!printing) return;  // 不是本次打印触发的 afterprint，忽略
       document.body.removeChild(iframe);
       URL.revokeObjectURL(url);
       printing = false;
       restoreBtn();
     };
-    iframe.contentWindow.addEventListener('afterprint', cleanup, { once: true });
+    // afterprint 在 window 上触发，不在 iframe.contentWindow
+    window.addEventListener('afterprint', cleanup, { once: true });
+    // 兜底 30s 超时释放
+    setTimeout(() => { if(printing) cleanup(); }, 30000);
   } catch(e){
     showError('打印失败：' + (e?.message || e));
     restoreBtn();
