@@ -916,8 +916,12 @@ function renderAnnotations(pageNum){
           pop.className = 'ann-cvr-pop';
           pop.textContent = '↩ 撤回';
           hl.appendChild(pop);
-          hl.addEventListener('click', (e) => {
+          hl.addEventListener('mouseenter', () => { pop.style.display = 'block'; pop.style.opacity = '1'; });
+          hl.addEventListener('mouseleave', () => { pop.style.display = 'none'; });
+          hl.addEventListener('click', function(e){
             e.stopPropagation();
+            // 立即隐藏 popup 防止残留
+            pop.style.display = 'none';
             deleteAnnotation(a.id).then(() => {
               for(let i = 1; pdfDoc && i <= pdfDoc.numPages; i++) renderAnnotations(i);
             });
@@ -1851,9 +1855,9 @@ window.addEventListener('scroll', () => {
   if(settingsMenu.classList.contains('show')) settingsMenu.classList.remove('show');
 }, true);
 
-// 翻页/缩放/页面加载后重新渲染批注
-pdfViewer.eventBus.on('scalechanging', () => { setTimeout(renderAllAnnotations, 100); });
-pdfViewer.eventBus.on('pagechanging', () => { setTimeout(renderAllAnnotations, 100); });
+// 缩放后重新渲染批注（位置百分比随页面尺寸变化）
+pdfViewer.eventBus.on('scalechanging', () => { renderAllAnnotations(); });
+// 页面加载后渲染批注
 pdfViewer.eventBus.on('pagesloaded', () => { setTimeout(renderAllAnnotations, 200); });
 
 // 清除批注（goHome 时）
@@ -1862,10 +1866,7 @@ function clearAnnotations(){
 }
 
 // 打开新文件时先渲染已有批注
-const origLoadFile = loadFile;
-// 在 loadFile 完成后自动渲染批注
-pdfViewer.eventBus.on('pagesloaded', () => { renderAllAnnotations(); });
-
+// 已由 pagesloaded 事件处理
 // 在 goHome 中清除批注（hook 进去）
 const origGoHome = goHome;
 // 附加到 goHome 里
