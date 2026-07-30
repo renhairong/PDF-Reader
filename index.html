@@ -1756,7 +1756,6 @@ togglePdfAnnotations.addEventListener('click', (e) => {
   e.stopPropagation();
   const visible = !togglePdfAnnotations.classList.contains('active');
   applyPdfAnnotations(visible);
-  settingsMenu.classList.remove('show');
 });
 // 点击其他区域关闭
 document.addEventListener('click', (e) => {
