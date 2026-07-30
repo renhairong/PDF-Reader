@@ -898,7 +898,7 @@ function renderAnnotations(pageNum){
     if(!pageEl || !pageEl.isConnected) return;
     const div = document.createElement('div');
     div.className = 'anns';
-    div.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:1;overflow:hidden;';
+    div.style.cssText = 'position:absolute;inset:0;z-index:1;overflow:hidden;';
     // 获取页面实际尺寸
     const pw = pageEl.offsetWidth;
     const ph = pageEl.offsetHeight;
@@ -1637,7 +1637,7 @@ function showTempHighlight(){
   if(pw < 1 || ph < 1) return;
   const div = document.createElement('div');
   div.className = 'anns';
-  div.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:1;overflow:hidden;';
+  div.style.cssText = 'position:absolute;inset:0;z-index:1;overflow:hidden;';
   for(const r of annSelectedRects){
     const hl = document.createElement('div');
     hl.className = 'ann-hl';
