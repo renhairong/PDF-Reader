@@ -912,8 +912,8 @@ async function renderAnnotation(inputText, selectedRects, pageNum, selectedText)
     text: selectedText,
     annotation: inputText || '',
     rects: selectedRects.map(r => ({ left: r.left, top: r.top, width: r.width, height: r.height })),
-    bubX: Math.min(...selectedRects.map(r => r.left)),
-    bubY: Math.min(...selectedRects.map(r => r.top)),
+    bubX: selectedRects[0].left,
+    bubY: selectedRects[0].top,
     color: '#FFD700',
     createdAt: Date.now()
   };
