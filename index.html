@@ -364,8 +364,8 @@
   }
   .ann-cvr-btn:hover{background:#e8e8ed}
   .dark .ann-cvr-btn:hover{background:#3a3a40}
-  /* 暗色模式下修正带颜色与页面背景一致，避免出现白色块 */
-  .dark .ann-cvr{background:var(--bar) !important}
+  /* 暗色模式下修正带继承与 canvas 相同的 filter，颜色和纸张一起变灰 */
+  .dark .ann-cvr{filter:brightness(.55) saturate(.9)}
   .ann-bub{font-size:13px;line-height:1;filter:drop-shadow(0 1px 2px rgba(0,0,0,.15));margin-top:-14px;}
   .ann-bub svg{color:var(--brand);vertical-align:middle;}
   .ann-pop{
