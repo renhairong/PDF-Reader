@@ -1308,7 +1308,13 @@ async function loadFile(file, options = {}){
     const pdfData = sourceData.slice(0);
     pdfRawData = historyData;
     if(pdfDoc){ pdfViewer.setDocument(null); findController.setDocument(null); linkService.setDocument(null); pdfDoc = null; }
-    pdfDoc = await pdfjsLib.getDocument({ data: pdfData }).promise;
+    pdfDoc = await pdfjsLib.getDocument({
+      data: pdfData,
+      // 启用 CJK 字符映射 + 标准字体数据，解决中文/部分字符无法显示的问题
+      cMapUrl: './node_modules/pdfjs-dist/cmaps/',
+      cMapPacked: true,
+      standardFontDataUrl: './node_modules/pdfjs-dist/standard_fonts/',
+    }).promise;
     pdfViewer.setDocument(pdfDoc);
     pdfViewer.scrollMode = ScrollMode.VERTICAL;
     linkService.setDocument(pdfDoc);
