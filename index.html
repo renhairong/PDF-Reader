@@ -1311,6 +1311,13 @@ async function loadFile(file, options = {}){
     findController.setDocument(pdfDoc);
     jumpInput.max = pdfDoc.numPages;
     jumpInput.placeholder = '页';
+    // 自动跳转时先定位页面，避免先渲染封面再跳转产生闪烁
+    if(getAutoJump()){
+      const savedProgress = checkProgress(file.name || '');
+      if(savedProgress && savedProgress.page > 1){
+        pdfViewer.currentPageNumber = savedProgress.page;
+      }
+    }
     // 关键：等 pagesloaded 再设置 scale/spread，否则 _pages 为空时 update() 触发解构 undefined 的 pageView 报错
     await new Promise(resolve => {
       const h = () => resolve();
@@ -1346,14 +1353,9 @@ async function loadFile(file, options = {}){
       saveRecentFile(file.name || '未命名.pdf', historyData);
     }
     const prog = checkProgress(lastFileName);
-    if(prog && prog.page > 1){
-      if(getAutoJump()){
-        // 自动跳转至上次阅读位置
-        pdfViewer.scrollPageIntoView({ pageNumber: prog.page });
-      } else {
-        progPage.textContent = prog.page;
-        progBanner.classList.add('show');
-      }
+    if(prog && prog.page > 1 && !getAutoJump()){
+      progPage.textContent = prog.page;
+      progBanner.classList.add('show');
     }
     if(tocPanel.classList.contains('show')) loadOutline();
   }catch(err){
