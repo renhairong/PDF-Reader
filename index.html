@@ -1486,13 +1486,27 @@ dmBtn.addEventListener('click', ()=> toggleDark());
 try { if(localStorage.getItem('pdfDarkMode') === '1') toggleDark(true); } catch(e) {}
 
 // ── 打印 ──
-printBtn.addEventListener('click', ()=>{
-  if(!pdfRawData){ showError('请先打开 PDF 文件'); return; }
-  // 用浏览器原生 PDF 渲染打印（不依赖 pdf.js，所有页面秒开）
-  const blob = new Blob([pdfRawData], { type: 'application/pdf' });
-  const url = URL.createObjectURL(blob);
-  window.open(url, '_blank');
-  setTimeout(() => URL.revokeObjectURL(url), 60000);
+let printState = null;
+window.addEventListener('beforeprint', ()=>{
+  // 不做任何 viewer 修改（准备工作在按钮点击时完成）
+});
+window.addEventListener('afterprint', ()=>{
+  if(!printState) return;
+  pdfViewer.currentScaleValue = printState.scale || 1;
+  isTwoPage = printState.twoPage;
+  applySpread();
+  printState = null;
+});
+printBtn.addEventListener('click', async ()=>{
+  if(!pdfDoc){ showError('请先打开 PDF 文件'); return; }
+  // 在点击打印按钮时就准备好 viewer：单页 + 缩放 100% + 等待渲染完成
+  printState = { twoPage: isTwoPage, scale: pdfViewer.currentScaleValue };
+  pdfViewer.spreadMode = SpreadMode.NONE;
+  pdfViewer.currentScaleValue = 1;
+  // 等待所有页面渲染完成后再唤出打印预览
+  await new Promise(r => setTimeout(r, 150));
+  renderAllAnnotations();
+  window.print();
 });
 
 // ── 搜索 ──
