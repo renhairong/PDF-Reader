@@ -507,6 +507,7 @@
     color:var(--brand);opacity:0;transition:opacity .12s;
   }
   #settingsMenu .menu-item.active .check{opacity:1}
+  #settingsMenu .menu-item + .menu-item{margin-top:2px;border-top:1px solid var(--line);padding-top:9px;}
   .hide-pdf-annotations .annotationLayer{display:none!important}
 
   /* ── 打印模式：仅打印 PDF 页面 ── */
@@ -686,6 +687,10 @@
   <button class="menu-item" id="togglePdfAnnotations">
     <svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
     <span>显示 PDF 内嵌批注</span>
+  </button>
+  <button class="menu-item" id="toggleAutoJump">
+    <svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+    <span>跳转至上次阅读位置</span>
   </button>
 </div>
 
@@ -1252,8 +1257,13 @@ async function loadFile(file, options = {}){
     }
     const prog = checkProgress(lastFileName);
     if(prog && prog.page > 1){
-      progPage.textContent = prog.page;
-      progBanner.classList.add('show');
+      if(getAutoJump()){
+        // 自动跳转至上次阅读位置
+        pdfViewer.scrollPageIntoView({ pageNumber: prog.page });
+      } else {
+        progPage.textContent = prog.page;
+        progBanner.classList.add('show');
+      }
     }
     if(tocPanel.classList.contains('show')) loadOutline();
   }catch(err){
@@ -1732,11 +1742,21 @@ function applyPdfAnnotations(visible){
   togglePdfAnnotations.classList.toggle('active', visible);
   try { localStorage.setItem('pdfShowAnnotations', visible ? '1' : ''); } catch(e){}
 }
+const toggleAutoJump = document.getElementById('toggleAutoJump');
+function applyAutoJump(enabled){
+  toggleAutoJump.classList.toggle('active', enabled);
+  try { localStorage.setItem('pdfAutoJump', enabled ? '1' : ''); } catch(e){}
+}
+function getAutoJump(){
+  return localStorage.getItem('pdfAutoJump') === '1';
+}
 // 读取已保存的偏好
 try {
   const saved = localStorage.getItem('pdfShowAnnotations') === '1';
   applyPdfAnnotations(saved);
 } catch(e){ applyPdfAnnotations(false); }
+// 自动跳转设置
+try { applyAutoJump(localStorage.getItem('pdfAutoJump') === '1'); } catch(e){}
 function toggleSettingsMenu(){
   if(settingsMenu.classList.contains('show')){
     settingsMenu.classList.remove('show');
@@ -1756,6 +1776,11 @@ togglePdfAnnotations.addEventListener('click', (e) => {
   e.stopPropagation();
   const visible = !togglePdfAnnotations.classList.contains('active');
   applyPdfAnnotations(visible);
+});
+toggleAutoJump.addEventListener('click', (e) => {
+  e.stopPropagation();
+  const enabled = !toggleAutoJump.classList.contains('active');
+  applyAutoJump(enabled);
 });
 // 点击其他区域关闭
 document.addEventListener('click', (e) => {
