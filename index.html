@@ -885,84 +885,76 @@ async function deleteAnnotationsByFile(fileId){
 }
 
 function renderAnnotations(pageNum){
-  // 清除该页现有批注 DOM
   const pageEl = document.querySelector(`.page[data-page-number="${pageNum}"]`);
   if(!pageEl) return;
-  const old = pageEl.querySelector('.anns');
-  if(old) old.remove();
-  // 从 IndexedDB 读取
   const fid = lastFileId;
   if(!fid) return;
   getAnnotations(fid, pageNum).then(list => {
-    if(list.length === 0) return;
     if(!pageEl || !pageEl.isConnected) return;
+    const pw = pageEl.offsetWidth, ph = pageEl.offsetHeight;
+    if(pw < 1 || ph < 1) return;
+    // 先创建新 DOM（不急着移除旧的，防止闪烁）
     const div = document.createElement('div');
     div.className = 'anns';
     div.style.cssText = 'position:absolute;inset:0;z-index:1;overflow:hidden;';
-    // 获取页面实际尺寸
-    const pw = pageEl.offsetWidth;
-    const ph = pageEl.offsetHeight;
-    if(pw < 1 || ph < 1) return;
-    for(const a of list){
-      const isCover = a.type === 'cover';
-      // 高亮/修正带 rects
-      for(const r of a.rects){
-        const hl = document.createElement('div');
-        if(isCover){
-          hl.className = 'ann-cvr';
-          hl.style.cssText = `position:absolute;left:${r.left*pw}px;top:${r.top*ph}px;width:${r.width*pw}px;height:${r.height*ph}px;background:#fff;`;
-          // 撤回按钮（实际 DOM 元素，避免被 overflow:hidden 裁掉）
-          const pop = document.createElement('div');
-          pop.className = 'ann-cvr-pop';
-          pop.textContent = '↩ 撤回';
-          hl.appendChild(pop);
-          hl.addEventListener('mouseenter', () => { pop.style.display = 'block'; pop.style.opacity = '1'; });
-          hl.addEventListener('mouseleave', () => { pop.style.display = 'none'; });
-          hl.addEventListener('click', function(e){
-            e.stopPropagation();
-            // 立即隐藏 popup 防止残留
-            pop.style.display = 'none';
-            deleteAnnotation(a.id).then(() => {
-              for(let i = 1; pdfDoc && i <= pdfDoc.numPages; i++) renderAnnotations(i);
+    if(list.length > 0){
+      for(const a of list){
+        const isCover = a.type === 'cover';
+        for(const r of a.rects){
+          const hl = document.createElement('div');
+          if(isCover){
+            hl.className = 'ann-cvr';
+            hl.style.cssText = `position:absolute;left:${r.left*pw}px;top:${r.top*ph}px;width:${r.width*pw}px;height:${r.height*ph}px;background:#fff;`;
+            const pop = document.createElement('div');
+            pop.className = 'ann-cvr-pop';
+            pop.textContent = '↩ 撤回';
+            hl.appendChild(pop);
+            hl.addEventListener('mouseenter', () => { pop.style.display = 'block'; pop.style.opacity = '1'; });
+            hl.addEventListener('mouseleave', () => { pop.style.display = 'none'; });
+            hl.addEventListener('click', function(e){
+              e.stopPropagation();
+              pop.style.display = 'none';
+              deleteAnnotation(a.id).then(() => {
+                for(let i = 1; pdfDoc && i <= pdfDoc.numPages; i++) renderAnnotations(i);
+              });
             });
-          });
-        } else {
-          hl.className = 'ann-hl';
-          hl.style.cssText = `position:absolute;left:${r.left*pw}px;top:${r.top*ph}px;width:${r.width*pw}px;height:${r.height*ph}px;background:rgba(255,212,0,.35);pointer-events:none;border-radius:2px;`;
+          } else {
+            hl.className = 'ann-hl';
+            hl.style.cssText = `position:absolute;left:${r.left*pw}px;top:${r.top*ph}px;width:${r.width*pw}px;height:${r.height*ph}px;background:rgba(255,212,0,.35);pointer-events:none;border-radius:2px;`;
+          }
+          div.appendChild(hl);
         }
-        div.appendChild(hl);
+        if(isCover) continue;
+        const bub = document.createElement('span');
+        bub.className = 'ann-bub';
+        bub.dataset.aid = a.id;
+        bub.title = a.annotation || '';
+        bub.style.cssText = `position:absolute;left:${a.bubX*pw}px;top:${a.bubY*ph}px;cursor:pointer;pointer-events:auto;z-index:3;`;
+        bub.innerHTML = '<svg viewBox="0 0 1024 1024" fill="currentColor" width="16" height="16" style="vertical-align:middle"><path d="M960.1 147.6c-18.2-16.5-41.9-25.6-66.7-25.6H131.7c-24.9 0-48.3 9.3-65.9 26.3C47.9 165.5 38 188.7 38 213.6v439.5c0 51.2 42 92.9 93.7 92.9H569v150.2c0 12.4 7.6 23.5 19.1 28 3.5 1.4 7.2 2 10.9 2 8.2 0 16.3-3.4 22.1-9.7L777.8 746h115.5c52.4 0 96.6-42.6 96.6-92.9V213.6c0.1-25.1-10.5-48.5-29.8-66zM930 653.1c0 17.2-17.4 32.9-36.6 32.9H764.7c-8.4 0-16.4 3.5-22.1 9.7L629 819.2V716c0-16.6-13.4-30-30-30H131.7c-18.6 0-33.7-14.8-33.7-32.9V213.6c0-17.7 14.8-31.6 33.7-31.6h761.7c19.5 0 36.6 14.8 36.6 31.6v439.5z" fill="currentColor"></path></svg>';
+        const pop = document.createElement('div');
+        pop.className = 'ann-pop';
+        pop.style.cssText = 'position:absolute;bottom:100%;left:50%;transform:translateX(-50%);display:none;';
+        pop.textContent = a.annotation || '';
+        bub.appendChild(pop);
+        bub.addEventListener('mouseenter', () => { pop.style.display = 'block'; });
+        bub.addEventListener('mouseleave', () => { pop.style.display = 'none'; });
+        bub.addEventListener('click', (e) => {
+          e.stopPropagation();
+          showAnnotationEditor(a, bub);
+        });
+        div.appendChild(bub);
       }
-      if(isCover) continue; // 修正带不生成气泡
-      // 💬 气泡（仅高亮批注）
-      const bub = document.createElement('span');
-      bub.className = 'ann-bub';
-      bub.dataset.aid = a.id;
-      bub.title = a.annotation || '';
-      bub.style.cssText = `position:absolute;left:${a.bubX*pw}px;top:${a.bubY*ph}px;cursor:pointer;pointer-events:auto;z-index:3;`;
-      bub.innerHTML = '<svg viewBox="0 0 1024 1024" fill="currentColor" width="16" height="16" style="vertical-align:middle"><path d="M960.1 147.6c-18.2-16.5-41.9-25.6-66.7-25.6H131.7c-24.9 0-48.3 9.3-65.9 26.3C47.9 165.5 38 188.7 38 213.6v439.5c0 51.2 42 92.9 93.7 92.9H569v150.2c0 12.4 7.6 23.5 19.1 28 3.5 1.4 7.2 2 10.9 2 8.2 0 16.3-3.4 22.1-9.7L777.8 746h115.5c52.4 0 96.6-42.6 96.6-92.9V213.6c0.1-25.1-10.5-48.5-29.8-66zM930 653.1c0 17.2-17.4 32.9-36.6 32.9H764.7c-8.4 0-16.4 3.5-22.1 9.7L629 819.2V716c0-16.6-13.4-30-30-30H131.7c-18.6 0-33.7-14.8-33.7-32.9V213.6c0-17.7 14.8-31.6 33.7-31.6h761.7c19.5 0 36.6 14.8 36.6 31.6v439.5z" fill="currentColor"></path></svg>';
-      // hover 显示批注
-      const pop = document.createElement('div');
-      pop.className = 'ann-pop';
-      pop.style.cssText = 'position:absolute;bottom:100%;left:50%;transform:translateX(-50%);display:none;';
-      pop.textContent = a.annotation || '';
-      bub.appendChild(pop);
-      bub.addEventListener('mouseenter', () => { pop.style.display = 'block'; });
-      bub.addEventListener('mouseleave', () => { pop.style.display = 'none'; });
-      bub.addEventListener('click', (e) => {
-        e.stopPropagation();
-        showAnnotationEditor(a, bub);
-      });
-      div.appendChild(bub);
     }
-    pageEl.appendChild(div);
+    // 新旧交换（原子操作，旧的在新的就位后才移除）
+    const old = pageEl.querySelector('.anns');
+    if(old) old.remove();
+    if(list.length > 0) pageEl.appendChild(div);
   });
 }
 function renderAllAnnotations(){
   if(!pdfDoc || !lastFileId) return;
   for(let i = 1; i <= pdfDoc.numPages; i++) renderAnnotations(i);
-}
-
-function showAnnotationEditor(a, anchorEl){
+}function showAnnotationEditor(a, anchorEl){
   document.getElementById('annEditText').value = a.annotation || '';
   document.getElementById('annEditText').dataset.aid = a.id;
   annEditOverlay.classList.add('show');
