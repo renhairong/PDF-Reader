@@ -51,6 +51,8 @@
   .btn:hover{border-color:var(--brand);color:var(--brand);box-shadow:0 1px 3px rgba(31,136,61,.08)}
   .btn:active{transform:scale(.96)}
   .btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+  .btn .pi-spinner{animation:piSpin .8s linear infinite}
+  @keyframes piSpin{to{transform:rotate(360deg)}}
   .title{font-weight:600;font-size:13px;letter-spacing:.3px;color:var(--sub);margin-right:4px;}
   .seg{
     display:inline-flex;border:1px solid var(--line);
@@ -601,7 +603,8 @@
     </div>
     <div class="grp">
       <button class="btn" id="printBtn" title="打印">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5V2h8v3"/><rect x="2" y="5" width="12" height="6" rx="1"/><path d="M4 12v2h8v-2M4 9h8"/></svg>
+        <svg class="pi-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5V2h8v3"/><rect x="2" y="5" width="12" height="6" rx="1"/><path d="M4 12v2h8v-2M4 9h8"/></svg>
+        <svg class="pi-spinner" style="display:none" width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5" stroke-dasharray="30 12"/></svg>
       </button>
     </div>
     <div class="grp">
@@ -1486,10 +1489,13 @@ dmBtn.addEventListener('click', ()=> toggleDark());
 try { if(localStorage.getItem('pdfDarkMode') === '1') toggleDark(true); } catch(e) {}
 
 // ── 打印 ──
+let printing = false;
 printBtn.addEventListener('click', async () => {
-  if(!pdfRawData){ showError('请先打开 PDF 文件'); return; }
+  if(!pdfRawData || printing){ showError(!pdfRawData ? '请先打开 PDF 文件' : '正在打印中'); return; }
+  printing = true;
   printBtn.disabled = true;
-  printBtn.textContent = '修改 PDF...';
+  printBtn.querySelector('.pi-icon').style.display = 'none';
+  printBtn.querySelector('.pi-spinner').style.display = '';
   try {
     // 1. 用 pdf-lib 载入原始 PDF（内存副本，不修改源文件）
     const { PDFDocument, rgb } = await import('./node_modules/pdf-lib/dist/pdf-lib.esm.js');
@@ -1520,7 +1526,6 @@ printBtn.addEventListener('click', async () => {
       }
     }
     // 3. 保存为修改版 PDF
-    printBtn.textContent = '生成中...';
     const pdfBytes = await srcPdf.save();
     const blob = new Blob([pdfBytes], { type: 'application/pdf' });
     const url = URL.createObjectURL(blob);
@@ -1531,19 +1536,26 @@ printBtn.addEventListener('click', async () => {
     iframe.onload = () => {
       iframe.contentWindow.focus();
       iframe.contentWindow.print();
-      printBtn.disabled = false;
-      printBtn.textContent = '打印';
+      // 打印预览弹框弹出，恢复按钮
+      restoreBtn();
     };
     document.body.appendChild(iframe);
-    // 5. 打印后清理
-    const cleanup = () => { document.body.removeChild(iframe); URL.revokeObjectURL(url); };
+    // 5. 打印完成后清理
+    const cleanup = () => { document.body.removeChild(iframe); URL.revokeObjectURL(url); printing = false; };
     iframe.contentWindow.addEventListener('afterprint', cleanup, { once: true });
   } catch(e){
     showError('打印失败：' + (e?.message || e));
-    printBtn.disabled = false;
-    printBtn.textContent = '打印';
+    restoreBtn();
   }
 });
+function restoreBtn(){
+  printing = false;
+  printBtn.disabled = false;
+  const icon = printBtn.querySelector('.pi-icon');
+  const spinner = printBtn.querySelector('.pi-spinner');
+  if(icon) icon.style.display = '';
+  if(spinner) spinner.style.display = 'none';
+}
 
 // ── 搜索 ──
 function doSearch(){
