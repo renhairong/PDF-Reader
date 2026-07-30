@@ -852,6 +852,13 @@ async function saveAnnotation(ann){
     tx.objectStore('annotations').put(ann);
     await new Promise(r => { tx.oncomplete = r; });
     db.close();
+    // 更新缓存
+    if(annDataCache){
+      if(!annDataCache[ann.pageNum]) annDataCache[ann.pageNum] = [];
+      const idx = annDataCache[ann.pageNum].findIndex(a => a.id === ann.id);
+      if(idx >= 0) annDataCache[ann.pageNum][idx] = ann;
+      else annDataCache[ann.pageNum].push(ann);
+    }
   } catch(e){}
 }
 async function getAnnotations(fileId, pageNum){
@@ -870,6 +877,21 @@ async function getAnnotations(fileId, pageNum){
     return items || [];
   } catch(e){ return []; }
 }
+let annDataCache = null; // { [pageNum]: [annotation, ...] }
+function getCachedAnnotations(){
+  return annDataCache;
+}
+async function loadAnnotationsCache(fileId){
+  const all = await getAnnotations(fileId);
+  annDataCache = {};
+  for(const a of all){
+    if(!annDataCache[a.pageNum]) annDataCache[a.pageNum] = [];
+    annDataCache[a.pageNum].push(a);
+  }
+}
+function clearAnnotationsCache(){
+  annDataCache = null;
+}
 async function deleteAnnotation(id){
   try {
     const db = await openDB();
@@ -877,6 +899,13 @@ async function deleteAnnotation(id){
     tx.objectStore('annotations').delete(id);
     await new Promise(r => { tx.oncomplete = r; });
     db.close();
+    // 更新缓存
+    if(annDataCache){
+      for(const pn in annDataCache){
+        annDataCache[pn] = annDataCache[pn].filter(a => a.id !== id);
+        if(annDataCache[pn].length === 0) delete annDataCache[pn];
+      }
+    }
   } catch(e){}
 }
 async function deleteAnnotationsByFile(fileId){
@@ -889,15 +918,25 @@ function renderAnnotations(pageNum){
   if(!pageEl) return;
   const fid = lastFileId;
   if(!fid) return;
+  // 优先使用缓存（同步，无闪烁）
+  const cache = getCachedAnnotations();
+  if(cache){
+    applyAnnotationsToPage(pageEl, cache[pageNum] || []);
+    return;
+  }
+  // 缓存未就绪时异步从 IDB 读取
   getAnnotations(fid, pageNum).then(list => {
-    if(!pageEl || !pageEl.isConnected) return;
-    const pw = pageEl.offsetWidth, ph = pageEl.offsetHeight;
-    if(pw < 1 || ph < 1) return;
-    // 先创建新 DOM（不急着移除旧的，防止闪烁）
-    const div = document.createElement('div');
-    div.className = 'anns';
-    div.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:1;overflow:hidden;';
-    if(list.length > 0){
+    applyAnnotationsToPage(pageEl, list || []);
+  });
+}
+function applyAnnotationsToPage(pageEl, list){
+  if(!pageEl || !pageEl.isConnected) return;
+  const pw = pageEl.offsetWidth, ph = pageEl.offsetHeight;
+  if(pw < 1 || ph < 1) return;
+  const div = document.createElement('div');
+  div.className = 'anns';
+  div.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:1;overflow:hidden;';
+  if(list.length > 0){
       for(const a of list){
         const isCover = a.type === 'cover';
         for(const r of a.rects){
@@ -955,7 +994,6 @@ function renderAnnotations(pageNum){
     const old = pageEl.querySelector('.anns');
     if(old) old.remove();
     if(list.length > 0) pageEl.appendChild(div);
-  });
 }
 function renderAllAnnotations(){
   if(!pdfDoc || !lastFileId) return;
@@ -1289,6 +1327,8 @@ async function loadFile(file, options = {}){
     // V1.1
     lastFileName = file.name || '';
     lastFileId = options.historyId || (Date.now().toString(36) + Math.random().toString(36).slice(2,6));
+    // 预加载批注缓存（避免打开文件时异步读 IDB 导致闪烁）
+    loadAnnotationsCache(lastFileId).then(() => setTimeout(renderAllAnnotations, 0));
     document.title = file.name || '云轩 PDF 阅读器 · 网页版';
     loadOutline();
     // 保存到最近打开记录（历史记录重开时只更新时间，不重复写文件数据）
@@ -1343,6 +1383,7 @@ function goHome(){
   pdfRawData = null;
   lastFileName = '';
   lastFileId = '';
+  clearAnnotationsCache();
   clearAnnotations();
   document.title = '云轩 PDF 阅读器 · 网页版';
   empty.style.display = '';
