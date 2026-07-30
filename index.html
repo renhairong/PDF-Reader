@@ -1481,12 +1481,7 @@ try { if(localStorage.getItem('pdfDarkMode') === '1') toggleDark(true); } catch(
 // ── 打印 ──
 let printState = null;
 window.addEventListener('beforeprint', ()=>{
-  if(!pdfDoc) return;
-  printState = { twoPage: isTwoPage, scale: pdfViewer.currentScaleValue };
-  // 打印时强制单页布局；不强制改 scale，避免异步重渲染导致打印空白
-  pdfViewer.spreadMode = SpreadMode.NONE;
-  // 等待布局更新后再渲染批注（让打印时拿到正确 DOM）
-  requestAnimationFrame(() => renderAllAnnotations());
+  // 不做任何 viewer 修改（准备工作在按钮点击时完成）
 });
 window.addEventListener('afterprint', ()=>{
   if(!printState) return;
@@ -1495,9 +1490,15 @@ window.addEventListener('afterprint', ()=>{
   applySpread();
   printState = null;
 });
-printBtn.addEventListener('click', ()=>{
+printBtn.addEventListener('click', async ()=>{
   if(!pdfDoc){ showError('请先打开 PDF 文件'); return; }
-  // 当前页面直接唤起浏览器/系统打印预览，不打开新窗口。
+  // 在点击打印按钮时就准备好 viewer：单页 + 缩放 100% + 等待渲染完成
+  printState = { twoPage: isTwoPage, scale: pdfViewer.currentScaleValue };
+  pdfViewer.spreadMode = SpreadMode.NONE;
+  pdfViewer.currentScaleValue = 1;
+  // 等待所有页面渲染完成后再唤出打印预览
+  await new Promise(r => setTimeout(r, 150));
+  renderAllAnnotations();
   window.print();
 });
 
