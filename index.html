@@ -355,6 +355,7 @@
   .ann-hl{border-radius:2px;pointer-events:none;mix-blend-mode:multiply;}
   .dark .ann-hl{mix-blend-mode:screen;opacity:.5}
   .ann-cvr{pointer-events:auto;cursor:default;}
+  .ann-cvr:hover .ann-cvr-pop{display:block}
   .ann-cvr-pop{
     display:none;
     position:absolute;left:50%;bottom:calc(100% + 4px);transform:translateX(-50%);
@@ -915,8 +916,6 @@ function renderAnnotations(pageNum){
           pop.className = 'ann-cvr-pop';
           pop.textContent = '↩ 撤回';
           hl.appendChild(pop);
-          hl.addEventListener('mouseenter', () => { pop.style.display = 'block'; });
-          hl.addEventListener('mouseleave', () => { pop.style.display = 'none'; });
           hl.addEventListener('click', (e) => {
             e.stopPropagation();
             deleteAnnotation(a.id).then(() => {
