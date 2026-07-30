@@ -354,7 +354,7 @@
   .dark #annMenu button:hover{background:#3a3a40}
   .ann-hl{border-radius:2px;pointer-events:none;mix-blend-mode:multiply;}
   .dark .ann-hl{mix-blend-mode:screen;opacity:.5}
-  .ann-bub{font-size:13px;line-height:1;filter:drop-shadow(0 1px 2px rgba(0,0,0,.15));margin-top:-14px;}
+  .ann-bub{font-size:13px;line-height:1;filter:drop-shadow(0 1px 2px rgba(0,0,0,.15));margin-top:-2px;}
   .ann-bub svg{color:var(--brand);vertical-align:middle;}
   .ann-pop{
     position:absolute;bottom:100%;left:50%;transform:translateX(-50%);
@@ -912,7 +912,7 @@ async function renderAnnotation(inputText, selectedRects, pageNum, selectedText)
     text: selectedText,
     annotation: inputText || '',
     rects: selectedRects.map(r => ({ left: r.left, top: r.top, width: r.width, height: r.height })),
-    bubX: Math.min(...selectedRects.map(r => r.left + r.width/2)),
+    bubX: Math.min(...selectedRects.map(r => r.left)),
     bubY: Math.min(...selectedRects.map(r => r.top)),
     color: '#FFD700',
     createdAt: Date.now()
