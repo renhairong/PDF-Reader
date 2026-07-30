@@ -354,6 +354,15 @@
   .dark #annMenu button:hover{background:#3a3a40}
   .ann-hl{border-radius:2px;pointer-events:none;mix-blend-mode:multiply;}
   .dark .ann-hl{mix-blend-mode:screen;opacity:.5}
+  .ann-cvr{pointer-events:auto;cursor:default;border-radius:1px;}
+  .ann-cvr:hover::after{
+    content:'撤回';position:absolute;left:50%;top:-24px;transform:translateX(-50%);
+    background:var(--bar);border:1px solid var(--line);
+    border-radius:6px;padding:3px 8px;font-size:11px;color:var(--brand);
+    white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.08);z-index:10;
+    pointer-events:none;line-height:1.4;
+  }
+  .dark .ann-cvr{background:#2c2c30 !important;border-color:#404044 !important;}
   .ann-bub{font-size:13px;line-height:1;filter:drop-shadow(0 1px 2px rgba(0,0,0,.15));margin-top:-14px;}
   .ann-bub svg{color:var(--brand);vertical-align:middle;}
   .ann-pop{
@@ -645,6 +654,7 @@
 <div id="annMenu">
   <button id="annCopy"><svg viewBox="0 0 1024 1024" fill="currentColor" width="14" height="14" style="vertical-align:middle;margin-right:4px"><path d="M867.09 64.12H363.93A92.92 92.92 0 0 0 271 157v113.12H144a80 80 0 0 0-80 80v530a80 80 0 0 0 80 80h530a80 80 0 0 0 80-80v-126h113.09A92.92 92.92 0 0 0 960 661.2V157a92.92 92.92 0 0 0-92.91-92.88zM674 900.12H144a20 20 0 0 1-20-20v-530a20 20 0 0 1 20-20h530a20 20 0 0 1 20 20v530a20 20 0 0 1-20 20zM901 661.2a32.92 32.92 0 0 1-32.92 32.92H755v-344a80 80 0 0 0-80-80H331V157a32.92 32.92 0 0 1 32.92-32.92h504.17A32.92 32.92 0 0 1 901 157z" fill="currentColor"/><path d="M542.38 495.12H277c-15.81 0-29.37 12-30.51 27.76a30 30 0 0 0 29.92 32.24h265.38c15.81 0 29.37-12 30.51-27.76a30 30 0 0 0-29.92-32.24zM542.38 675.12H277c-15.81 0-29.37 12-30.51 27.76a30 30 0 0 0 29.92 32.24h265.38c15.81 0 29.37-12 30.51-27.76a30 30 0 0 0-29.92-32.24z" fill="currentColor"/></svg>复制</button>
   <button id="annNew"><svg viewBox="0 0 1024 1024" fill="currentColor" width="14" height="14" style="vertical-align:middle;margin-right:4px"><path d="M960.1 147.6c-18.2-16.5-41.9-25.6-66.7-25.6H131.7c-24.9 0-48.3 9.3-65.9 26.3C47.9 165.5 38 188.7 38 213.6v439.5c0 51.2 42 92.9 93.7 92.9H569v150.2c0 12.4 7.6 23.5 19.1 28 3.5 1.4 7.2 2 10.9 2 8.2 0 16.3-3.4 22.1-9.7L777.8 746h115.5c52.4 0 96.6-42.6 96.6-92.9V213.6c0.1-25.1-10.5-48.5-29.8-66zM930 653.1c0 17.2-17.4 32.9-36.6 32.9H764.7c-8.4 0-16.4 3.5-22.1 9.7L629 819.2V716c0-16.6-13.4-30-30-30H131.7c-18.6 0-33.7-14.8-33.7-32.9V213.6c0-17.7 14.8-31.6 33.7-31.6h761.7c19.5 0 36.6 14.8 36.6 31.6v439.5z" fill="currentColor"></path></svg>批注</button>
+  <button id="annCover"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" style="vertical-align:middle;margin-right:4px"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="9" x2="15" y2="15"/><line x1="15" y1="9" x2="9" y2="15"/></svg>修正带</button>
 </div>
 <div id="annInputOverlay">
   <div class="head">
@@ -773,7 +783,7 @@ const recentFilesEl = document.getElementById('recentFiles');
 
 // ── 最近打开 (localStorage 存列表 + IndexedDB 存文件数据) ──
 const RECENT_LIST_KEY = 'pdfRecentList';
-const MAX_RECENT = 5;
+const MAX_RECENT = 10;
 
 function getRecentList(){
   try {
@@ -892,14 +902,30 @@ function renderAnnotations(pageNum){
     const ph = pageEl.offsetHeight;
     if(pw < 1 || ph < 1) return;
     for(const a of list){
-      // 高亮 rects
+      const isCover = a.type === 'cover';
+      // 高亮/修正带 rects
       for(const r of a.rects){
         const hl = document.createElement('div');
-        hl.className = 'ann-hl';
-        hl.style.cssText = `position:absolute;left:${r.left*pw}px;top:${r.top*ph}px;width:${r.width*pw}px;height:${r.height*ph}px;background:rgba(255,212,0,.35);pointer-events:none;border-radius:2px;`;
+        if(isCover){
+          hl.className = 'ann-cvr';
+          hl.style.cssText = `position:absolute;left:${r.left*pw}px;top:${r.top*ph}px;width:${r.width*pw}px;height:${r.height*ph}px;background:#fff;border:1px solid #e0e0e0;`;
+          // 修正带悬停显示撤回，点击删除
+          hl.addEventListener('mouseenter', () => { hl.classList.add('hover'); });
+          hl.addEventListener('mouseleave', () => { hl.classList.remove('hover'); });
+          hl.addEventListener('click', (e) => {
+            e.stopPropagation();
+            deleteAnnotation(a.id).then(() => {
+              for(let i = 1; pdfDoc && i <= pdfDoc.numPages; i++) renderAnnotations(i);
+            });
+          });
+        } else {
+          hl.className = 'ann-hl';
+          hl.style.cssText = `position:absolute;left:${r.left*pw}px;top:${r.top*ph}px;width:${r.width*pw}px;height:${r.height*ph}px;background:rgba(255,212,0,.35);pointer-events:none;border-radius:2px;`;
+        }
         div.appendChild(hl);
       }
-      // 💬 气泡
+      if(isCover) continue; // 修正带不生成气泡
+      // 💬 气泡（仅高亮批注）
       const bub = document.createElement('span');
       bub.className = 'ann-bub';
       bub.dataset.aid = a.id;
@@ -950,13 +976,14 @@ function showAnnotationEditor(a, anchorEl){
   setTimeout(() => annEditText.focus(), 50);
 }
 
-async function renderAnnotation(inputText, selectedRects, pageNum, selectedText){
+async function renderAnnotation(inputText, selectedRects, pageNum, selectedText, type){
   const a = {
     id: Date.now() + '_' + Math.random().toString(36).slice(2, 6),
     fileId: lastFileId,
     pageNum,
     text: selectedText,
     annotation: inputText || '',
+    type: type || 'highlight',
     rects: selectedRects.map(r => ({ left: r.left, top: r.top, width: r.width, height: r.height })),
     bubX: selectedRects[0].left,
     bubY: selectedRects[0].top,
@@ -1401,6 +1428,8 @@ window.addEventListener('beforeprint', ()=>{
   // 打印时强制每张纸一页，并使用 100% 原始比例。
   pdfViewer.spreadMode = SpreadMode.NONE;
   pdfViewer.currentScaleValue = 1;
+  // 立即渲染批注和修正带
+  renderAllAnnotations();
 });
 window.addEventListener('afterprint', ()=>{
   if(!printState) return;
@@ -1578,6 +1607,7 @@ modalOverlay.addEventListener('click', (e) => {
 const annMenu = document.getElementById('annMenu');
 const annCopy = document.getElementById('annCopy');
 const annNew = document.getElementById('annNew');
+const annCover = document.getElementById('annCover');
 const annInputOverlay = document.getElementById('annInputOverlay');
 const annInputText = document.getElementById('annInputText');
 const annInputClose = document.getElementById('annInputClose');
@@ -1705,6 +1735,13 @@ annNew.addEventListener('click', () => {
   annInputOverlay.classList.add('show');
   annInputText.value = '';
   annInputText.focus();
+});
+
+// 修正带
+annCover.addEventListener('click', () => {
+  if(!annSelectedRects) return;
+  renderAnnotation('', annSelectedRects, annSelectedPage, annSelectedText, 'cover');
+  hideAnnMenu();
 });
 
 // 关闭输入框
