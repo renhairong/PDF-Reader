@@ -896,7 +896,7 @@ function renderAnnotations(pageNum){
     // 先创建新 DOM（不急着移除旧的，防止闪烁）
     const div = document.createElement('div');
     div.className = 'anns';
-    div.style.cssText = 'position:absolute;inset:0;z-index:1;overflow:hidden;';
+    div.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:1;overflow:hidden;';
     if(list.length > 0){
       for(const a of list){
         const isCover = a.type === 'cover';
@@ -1639,7 +1639,7 @@ function showTempHighlight(){
   if(pw < 1 || ph < 1) return;
   const div = document.createElement('div');
   div.className = 'anns';
-  div.style.cssText = 'position:absolute;inset:0;z-index:1;overflow:hidden;';
+  div.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:1;overflow:hidden;';
   for(const r of annSelectedRects){
     const hl = document.createElement('div');
     hl.className = 'ann-hl';
@@ -1832,10 +1832,10 @@ settingsBtn.addEventListener('click', (e) => {
   e.stopPropagation();
   toggleSettingsMenu();
 });
-// 点击外部关闭所有修正带撤回按钮
-document.addEventListener('click', () => {
-  document.querySelectorAll('.ann-cvr-btn').forEach(b => b.style.display = 'none');
-}, true);
+// 点击非修正带区域关闭撤回按钮
+document.addEventListener('click', (e) => {
+  if(!e.target.closest('.ann-cvr,.ann-cvr-btn')) document.querySelectorAll('.ann-cvr-btn').forEach(b => b.style.display = 'none');
+});
 
 togglePdfAnnotations.addEventListener('click', (e) => {
   e.stopPropagation();
