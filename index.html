@@ -32,8 +32,9 @@
   }
   /* 安全居中：内容放得下时居中，放不下时可滚动到最左 */
   #toolbar::before,#toolbar::after{content:"";margin:auto}
-  #toolbar::-webkit-scrollbar{height:4px}
-  #toolbar::-webkit-scrollbar-thumb{background:rgba(128,128,128,.35);border-radius:2px}
+  #toolbar::-webkit-scrollbar{height:3px}
+  #toolbar::-webkit-scrollbar-thumb{background:rgba(128,128,128,.25);border-radius:2px}
+  #toolbar::-webkit-scrollbar-thumb:hover{background:rgba(128,128,128,.5)}
   #toolbar::-webkit-scrollbar-track{background:transparent}
   #appTitle{
     position:absolute;left:20px;top:50%;transform:translateY(-50%);
