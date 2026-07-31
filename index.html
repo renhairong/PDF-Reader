@@ -1515,7 +1515,7 @@ let printing = false;
 // ── 生成修改版 PDF（打印/下载共用）──
 async function buildModifiedPdf(){
   // 用 pdf-lib 载入原始 PDF（内存副本，不修改源文件）
-  const { PDFDocument, rgb } = await import('./node_modules/pdf-lib/dist/pdf-lib.esm.js');
+  const { PDFDocument, rgb } = await loadPdfLibModule();
   const srcPdf = await PDFDocument.load(pdfRawData.slice(0));
   const pages = srcPdf.getPages();
   // 从缓存读取修正带/批注，写入 PDF 页面
@@ -1572,28 +1572,40 @@ function addHighlightAnnotation(srcPdf, page, rectsPdf, text){
   for(const r of rectsPdf){
     quadPoints.push(r.x, r.y, r.x + r.w, r.y, r.x + r.w, r.y + r.h, r.x, r.y + r.h);
   }
-  // 先注册 Highlight（空 Popup 占位）
-  const highlightRef = ctx.register(ctx.obj({
-    Type: 'Annot',
-    Subtype: 'Highlight',
-    Rect: rect,
-    QuadPoints: quadPoints,
-    Contents: text,
-    C: [1, 0.83, 0]
-  }));
-  // Popup 注释（Parent → Highlight）
+  // 中文字符串必须用 UTF-16BE + BOM（否则按 PDFDocEncoding 解码成乱码如"TC8"）
+  // 用 PDFHexString.fromText(text) 直接生成 UTF-16 hex 字符串
+  // 浏览器 import 解构拿不到 PDFHexString，但通过 module 对象可以
+  const hexStr = srcPdf.context.obj(text); // 先占位，下面替换为 PDFHexString
   const popupRef = ctx.register(ctx.obj({
-    Type: 'Annot',
-    Subtype: 'Popup',
-    Parent: highlightRef,
-    Open: false,
+    Type: 'Annot', Subtype: 'Popup',
     Contents: text,
     Rect: [maxX + 5, minY, maxX + 5 + 200, minY + 60]
   }));
-  // 回填 Highlight 的 Popup 引用（用 ctx.obj('Parent') 拿到 PDFName，无需顶层 import）
+  // Highlight 注释（先用 PDFString 保存，后续替换为 PDFHexString 以支持中文）
+  const highlightRef = ctx.register(ctx.obj({
+    Type: 'Annot', Subtype: 'Highlight',
+    Rect: rect,
+    QuadPoints: quadPoints,
+    Contents: text,
+    C: [1, 0.83, 0],
+    Popup: popupRef
+  }));
+  // 回填 Popup 的 Parent（用 ctx.obj('Parent') 拿到 PDFName，避免顶层 import）
   ctx.lookup(popupRef).set(ctx.obj('Parent'), highlightRef);
+  // 关键修复：把 Contents 替换为 UTF-16BE + BOM 的 PDFHexString，让中文字符正确编码
+  // 通过完整 module 对象获取 PDFHexString（避免解构兼容问题）
+  const pdfHexString = pdfLibModule.PDFHexString.fromText(text);
+  ctx.lookup(highlightRef).set(ctx.obj('Contents'), pdfHexString);
+  ctx.lookup(popupRef).set(ctx.obj('Contents'), pdfHexString);
   // 挂到页面
   page.node.addAnnot(highlightRef);
+}
+
+// 引用 pdf-lib module（懒加载缓存）
+let pdfLibModule = null;
+async function loadPdfLibModule(){
+  if(!pdfLibModule) pdfLibModule = await import('./node_modules/pdf-lib/dist/pdf-lib.esm.js');
+  return pdfLibModule;
 }
 
 printBtn.addEventListener('click', async () => {
