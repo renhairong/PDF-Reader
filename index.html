@@ -1515,7 +1515,7 @@ let printing = false;
 // ── 生成修改版 PDF（打印/下载共用）──
 async function buildModifiedPdf(){
   // 用 pdf-lib 载入原始 PDF（内存副本，不修改源文件）
-  const { PDFDocument, PDFName, rgb } = await import('./node_modules/pdf-lib/dist/pdf-lib.esm.js');
+  const { PDFDocument, rgb } = await import('./node_modules/pdf-lib/dist/pdf-lib.esm.js');
   const srcPdf = await PDFDocument.load(pdfRawData.slice(0));
   const pages = srcPdf.getPages();
   // 从缓存读取修正带/批注，写入 PDF 页面
@@ -1590,8 +1590,8 @@ function addHighlightAnnotation(srcPdf, page, rectsPdf, text){
     Contents: text,
     Rect: [maxX + 5, minY, maxX + 5 + 200, minY + 60]
   }));
-  // 回填 Highlight 的 Popup 引用
-  ctx.lookup(popupRef).set(PDFName.of('Parent'), highlightRef);
+  // 回填 Highlight 的 Popup 引用（用 ctx.obj('Parent') 拿到 PDFName，无需顶层 import）
+  ctx.lookup(popupRef).set(ctx.obj('Parent'), highlightRef);
   // 挂到页面
   page.node.addAnnot(highlightRef);
 }
