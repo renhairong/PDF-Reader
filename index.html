@@ -266,9 +266,7 @@
   .search-bar{
     display:none;align-items:center;gap:6px;
     padding:8px 12px;
-    position:fixed;left:50%;bottom:60px;
-    transform:translateX(-50%);
-    z-index:90;
+    position:fixed;z-index:90;
     background:var(--bar);border:1px solid var(--line);
     border-radius:10px;
     box-shadow:0 4px 20px rgba(0,0,0,.10),0 1px 4px rgba(0,0,0,.04);
@@ -1592,8 +1590,13 @@ searchBtn.addEventListener('click', ()=>{
   const open = !searchBar.classList.contains('show');
   searchBar.classList.toggle('show', open);
   searchBtn.classList.toggle('active', open);
-  if(open) searchInput.focus();
-  else { searchInput.value = ''; clearSearch(); }
+  if(open){
+    // 定位到搜索按钮下方（和设置菜单一样）
+    const r = searchBtn.getBoundingClientRect();
+    searchBar.style.top = (r.bottom + 6) + 'px';
+    searchBar.style.left = r.left + 'px';
+    searchInput.focus();
+  } else { searchInput.value = ''; clearSearch(); }
 });
 searchInput.addEventListener('input', doSearch);
 searchInput.addEventListener('keydown', e=>{
