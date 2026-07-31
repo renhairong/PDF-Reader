@@ -614,6 +614,10 @@
         <svg class="pi-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5V2h8v3"/><rect x="2" y="5" width="12" height="6" rx="1"/><path d="M4 12v2h8v-2M4 9h8"/></svg>
         <svg class="pi-spinner" style="display:none" width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5" stroke-dasharray="30 12"/></svg>
       </button>
+      <button class="btn" id="downloadBtn" title="下载修改版 PDF">
+        <svg class="dl-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v8"/><path d="M4.5 7.5L8 11l3.5-3.5"/><path d="M2.5 13.5h11"/></svg>
+        <svg class="dl-spinner" style="display:none" width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5" stroke-dasharray="30 12"/></svg>
+      </button>
     </div>
     <div class="grp">
       <button class="btn" id="dmBtn" title="暗色模式">
@@ -793,6 +797,7 @@ const progPage  = document.getElementById('progPage');
 const fsBtn     = document.getElementById('fsBtn');
 const dmBtn     = document.getElementById('dmBtn');
 const printBtn  = document.getElementById('printBtn');
+const downloadBtn = document.getElementById('downloadBtn');
 const searchBtn  = document.getElementById('searchBtn');
 const searchBar  = document.getElementById('searchBar');
 const searchInput= document.getElementById('searchInput');
@@ -1507,6 +1512,40 @@ try { if(localStorage.getItem('pdfDarkMode') === '1') toggleDark(true); } catch(
 
 // ── 打印 ──
 let printing = false;
+// ── 生成修改版 PDF（打印/下载共用）──
+async function buildModifiedPdf(){
+  // 用 pdf-lib 载入原始 PDF（内存副本，不修改源文件）
+  const { PDFDocument, rgb } = await import('./node_modules/pdf-lib/dist/pdf-lib.esm.js');
+  const srcPdf = await PDFDocument.load(pdfRawData.slice(0));
+  const pages = srcPdf.getPages();
+  // 从缓存读取修正带/批注，写入 PDF 页面
+  const cache = getCachedAnnotations();
+  if(cache){
+    for(const pageNum in cache){
+      const anns = cache[pageNum];
+      const pi = parseInt(pageNum) - 1;
+      if(pi < 0 || pi >= pages.length) continue;
+      const pg = pages[pi];
+      const { width, height } = pg.getSize();
+      for(const a of anns){
+        for(const r of a.rects){
+          const x = r.left * width;
+          const y = (1 - r.top - r.height) * height;
+          const w = r.width * width;
+          const h = r.height * height;
+          if(a.type === 'cover'){
+            pg.drawRectangle({ x, y, width: w, height: h, color: rgb(1, 1, 1) });
+          } else {
+            pg.drawRectangle({ x, y, width: w, height: h, color: rgb(1, 0.83, 0), opacity: 0.35 });
+          }
+        }
+      }
+    }
+  }
+  // 保存为修改版 PDF 字节
+  return await srcPdf.save();
+}
+
 printBtn.addEventListener('click', async () => {
   if(!pdfRawData || printing){ showError(!pdfRawData ? '请先打开 PDF 文件' : '正在打印中'); return; }
   printing = true;
@@ -1514,39 +1553,11 @@ printBtn.addEventListener('click', async () => {
   printBtn.querySelector('.pi-icon').style.display = 'none';
   printBtn.querySelector('.pi-spinner').style.display = '';
   try {
-    // 1. 用 pdf-lib 载入原始 PDF（内存副本，不修改源文件）
-    const { PDFDocument, rgb } = await import('./node_modules/pdf-lib/dist/pdf-lib.esm.js');
-    const srcPdf = await PDFDocument.load(pdfRawData.slice(0));
-    const pages = srcPdf.getPages();
-    // 2. 从缓存读取修正带/批注，写入 PDF 页面
-    const cache = getCachedAnnotations();
-    if(cache){
-      for(const pageNum in cache){
-        const anns = cache[pageNum];
-        const pi = parseInt(pageNum) - 1;
-        if(pi < 0 || pi >= pages.length) continue;
-        const pg = pages[pi];
-        const { width, height } = pg.getSize();
-        for(const a of anns){
-          for(const r of a.rects){
-            const x = r.left * width;
-            const y = (1 - r.top - r.height) * height;
-            const w = r.width * width;
-            const h = r.height * height;
-            if(a.type === 'cover'){
-              pg.drawRectangle({ x, y, width: w, height: h, color: rgb(1, 1, 1) });
-            } else {
-              pg.drawRectangle({ x, y, width: w, height: h, color: rgb(1, 0.83, 0), opacity: 0.35 });
-            }
-          }
-        }
-      }
-    }
-    // 3. 保存为修改版 PDF
-    const pdfBytes = await srcPdf.save();
+    // 生成修改版 PDF
+    const pdfBytes = await buildModifiedPdf();
     const blob = new Blob([pdfBytes], { type: 'application/pdf' });
     const url = URL.createObjectURL(blob);
-    // 4. 隐藏 iframe 加载 → 浏览器原生打印
+    // 隐藏 iframe 加载 → 浏览器原生打印
     const iframe = document.createElement('iframe');
     iframe.style.cssText = 'position:fixed;right:100%;bottom:100%;width:0;height:0;border:0;';
     iframe.src = url;
@@ -1556,21 +1567,21 @@ printBtn.addEventListener('click', async () => {
       // afterprint 在 iframe 场景不可靠，用定时器恢复按钮
       setTimeout(() => {
         printing = false;
-        restoreBtn();
+        restorePrintBtn();
       }, 1500);
     };
     document.body.appendChild(iframe);
-    // 5. 30 秒后清理 iframe 资源
+    // 60 秒后清理 iframe 资源
     setTimeout(() => {
       if(iframe.parentNode) iframe.parentNode.removeChild(iframe);
       URL.revokeObjectURL(url);
     }, 60000);
   } catch(e){
     showError('打印失败：' + (e?.message || e));
-    restoreBtn();
+    restorePrintBtn();
   }
 });
-function restoreBtn(){
+function restorePrintBtn(){
   printing = false;
   printBtn.disabled = false;
   const icon = printBtn.querySelector('.pi-icon');
@@ -1578,6 +1589,38 @@ function restoreBtn(){
   if(icon) icon.style.display = '';
   if(spinner) spinner.style.display = 'none';
 }
+
+// ── 下载修改版 PDF ──
+let downloading = false;
+downloadBtn.addEventListener('click', async () => {
+  if(!pdfRawData || downloading){ showError(!pdfRawData ? '请先打开 PDF 文件' : '正在下载中'); return; }
+  downloading = true;
+  downloadBtn.disabled = true;
+  downloadBtn.querySelector('.dl-icon').style.display = 'none';
+  downloadBtn.querySelector('.dl-spinner').style.display = '';
+  try {
+    // 生成修改版 PDF
+    const pdfBytes = await buildModifiedPdf();
+    const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    // 触发浏览器下载，保留原文件名（用户可自行改名）
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = lastFileName || 'modified.pdf';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch(e){
+    showError('下载失败：' + (e?.message || e));
+  }
+  downloading = false;
+  downloadBtn.disabled = false;
+  const icon = downloadBtn.querySelector('.dl-icon');
+  const spinner = downloadBtn.querySelector('.dl-spinner');
+  if(icon) icon.style.display = '';
+  if(spinner) spinner.style.display = 'none';
+});
 
 // ── 搜索 ──
 function doSearch(){
