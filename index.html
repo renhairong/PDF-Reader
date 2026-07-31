@@ -1572,33 +1572,31 @@ function addHighlightAnnotation(srcPdf, page, rectsPdf, text){
   for(const r of rectsPdf){
     quadPoints.push(r.x, r.y, r.x + r.w, r.y, r.x + r.w, r.y + r.h, r.x, r.y + r.h);
   }
-  // 中文字符串必须用 UTF-16BE + BOM（否则按 PDFDocEncoding 解码成乱码如"TC8"）
-  // 用 PDFHexString.fromText(text) 直接生成 UTF-16 hex 字符串
-  // 浏览器 import 解构拿不到 PDFHexString，但通过 module 对象可以
-  const hexStr = srcPdf.context.obj(text); // 先占位，下面替换为 PDFHexString
+  // 中文字符串必须用 UTF-16BE + BOM 编码（PDFHexString.fromText）
+  // 注意：ctx.obj() 里的字符串会被转成 PDFName，所以创建时不含 Contents，之后单独 set PDFHexString
+  const pdfHexString = pdfLibModule.PDFHexString.fromText(text);
+  // Popup 注释（Contents + Parent 稍后回填）
   const popupRef = ctx.register(ctx.obj({
     Type: 'Annot', Subtype: 'Popup',
-    Contents: text,
+    Open: false,
     Rect: [maxX + 5, minY, maxX + 5 + 200, minY + 60]
   }));
-  // Highlight 注释（先用 PDFString 保存，后续替换为 PDFHexString 以支持中文）
+  // Highlight 注释（含 Popup 引用）
   const highlightRef = ctx.register(ctx.obj({
     Type: 'Annot', Subtype: 'Highlight',
     Rect: rect,
     QuadPoints: quadPoints,
-    Contents: text,
     C: [1, 0.83, 0],
     Popup: popupRef
   }));
-  // 回填 Popup 的 Parent（用 ctx.obj('Parent') 拿到 PDFName，避免顶层 import）
-  ctx.lookup(popupRef).set(ctx.obj('Parent'), highlightRef);
-  // 关键修复：把 Contents 替换为 UTF-16BE + BOM 的 PDFHexString，让中文字符正确编码
-  // 通过完整 module 对象获取 PDFHexString（避免解构兼容问题）
-  const pdfHexString = pdfLibModule.PDFHexString.fromText(text);
+  // 设置 UTF-16 编码的批注内容
   ctx.lookup(highlightRef).set(ctx.obj('Contents'), pdfHexString);
   ctx.lookup(popupRef).set(ctx.obj('Contents'), pdfHexString);
-  // 挂到页面
+  // Popup 的 Parent 回指 Highlight（互相引用）
+  ctx.lookup(popupRef).set(ctx.obj('Parent'), highlightRef);
+  // 两个都加入页面 /Annots（pdf.js 需要 popup 也在 Annots 里才能渲染并绑定 hover）
   page.node.addAnnot(highlightRef);
+  page.node.addAnnot(popupRef);
 }
 
 // 引用 pdf-lib module（懒加载缓存）
