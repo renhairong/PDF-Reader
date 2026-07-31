@@ -1515,7 +1515,7 @@ let printing = false;
 // ── 生成修改版 PDF（打印/下载共用）──
 async function buildModifiedPdf(){
   // 用 pdf-lib 载入原始 PDF（内存副本，不修改源文件）
-  const { PDFDocument, rgb } = await import('./node_modules/pdf-lib/dist/pdf-lib.esm.js');
+  const { PDFDocument, PDFName, rgb } = await import('./node_modules/pdf-lib/dist/pdf-lib.esm.js');
   const srcPdf = await PDFDocument.load(pdfRawData.slice(0));
   const pages = srcPdf.getPages();
   // 从缓存读取修正带/批注，写入 PDF 页面
@@ -1528,15 +1528,26 @@ async function buildModifiedPdf(){
       const pg = pages[pi];
       const { width, height } = pg.getSize();
       for(const a of anns){
-        for(const r of a.rects){
-          const x = r.left * width;
-          const y = (1 - r.top - r.height) * height;
-          const w = r.width * width;
-          const h = r.height * height;
-          if(a.type === 'cover'){
-            pg.drawRectangle({ x, y, width: w, height: h, color: rgb(1, 1, 1) });
-          } else {
-            pg.drawRectangle({ x, y, width: w, height: h, color: rgb(1, 0.83, 0), opacity: 0.35 });
+        // 百分比 → 页面坐标（PDF 左下原点）
+        const rectsPdf = (a.rects || []).map(r => ({
+          x: r.left * width,
+          y: (1 - r.top - r.height) * height,
+          w: r.width * width,
+          h: r.height * height
+        }));
+        if(a.type === 'cover'){
+          // 修正带：白色矩形盖住
+          for(const r of rectsPdf){
+            pg.drawRectangle({ x: r.x, y: r.y, width: r.w, height: r.h, color: rgb(1, 1, 1) });
+          }
+        } else {
+          // 高亮：画黄色矩形（保证所有阅读器可见背景）
+          for(const r of rectsPdf){
+            pg.drawRectangle({ x: r.x, y: r.y, width: r.w, height: r.h, color: rgb(1, 0.83, 0), opacity: 0.35 });
+          }
+          // 有批注内容的：额外写 Highlight + Popup 标准注释（悬停显示内容）
+          if(a.annotation && a.annotation.trim()){
+            addHighlightAnnotation(srcPdf, pg, rectsPdf, a.annotation.trim());
           }
         }
       }
@@ -1544,6 +1555,45 @@ async function buildModifiedPdf(){
   }
   // 保存为修改版 PDF 字节
   return await srcPdf.save();
+}
+
+// 写 PDF 标准高亮注释 + Popup 注释（悬停/点击显示批注内容）
+function addHighlightAnnotation(srcPdf, page, rectsPdf, text){
+  const ctx = srcPdf.context;
+  // 所有矩形的包围盒
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for(const r of rectsPdf){
+    minX = Math.min(minX, r.x); minY = Math.min(minY, r.y);
+    maxX = Math.max(maxX, r.x + r.w); maxY = Math.max(maxY, r.y + r.h);
+  }
+  const rect = [minX, minY, maxX, maxY];
+  // QuadPoints：每个矩形 4 顶点（左下、右下、右上、左上）
+  const quadPoints = [];
+  for(const r of rectsPdf){
+    quadPoints.push(r.x, r.y, r.x + r.w, r.y, r.x + r.w, r.y + r.h, r.x, r.y + r.h);
+  }
+  // 先注册 Highlight（空 Popup 占位）
+  const highlightRef = ctx.register(ctx.obj({
+    Type: 'Annot',
+    Subtype: 'Highlight',
+    Rect: rect,
+    QuadPoints: quadPoints,
+    Contents: text,
+    C: [1, 0.83, 0]
+  }));
+  // Popup 注释（Parent → Highlight）
+  const popupRef = ctx.register(ctx.obj({
+    Type: 'Annot',
+    Subtype: 'Popup',
+    Parent: highlightRef,
+    Open: false,
+    Contents: text,
+    Rect: [maxX + 5, minY, maxX + 5 + 200, minY + 60]
+  }));
+  // 回填 Highlight 的 Popup 引用
+  ctx.lookup(popupRef).set(PDFName.of('Parent'), highlightRef);
+  // 挂到页面
+  page.node.addAnnot(highlightRef);
 }
 
 printBtn.addEventListener('click', async () => {
