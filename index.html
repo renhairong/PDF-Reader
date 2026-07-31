@@ -261,11 +261,18 @@
   .dark .pdfViewer .page{background:#2c2c30 !important}
   .dark .pdfViewer .page canvas{filter:brightness(.55) saturate(.9)}
   .dark .pdfViewer .textLayer{filter:none !important;color:#d4d4d4}
-  /* ── 搜索框 ── */
+  /* ── 搜索浮框 ── */
   #searchBtn.active{background:var(--brand);color:#fff;border-color:var(--brand)}
   .search-bar{
     display:none;align-items:center;gap:6px;
-    padding:6px 14px;
+    padding:8px 12px;
+    position:fixed;left:50%;bottom:60px;
+    transform:translateX(-50%);
+    z-index:90;
+    background:var(--bar);border:1px solid var(--line);
+    border-radius:10px;
+    box-shadow:0 4px 20px rgba(0,0,0,.10),0 1px 4px rgba(0,0,0,.04);
+    animation:scaleIn .15s ease;
   }
   .search-bar.show{display:flex}
   #searchInput{
@@ -594,13 +601,6 @@
       <button class="btn" id="searchBtn" title="搜索">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg>
       </button>
-      <div class="search-bar" id="searchBar">
-        <input id="searchInput" type="text" placeholder="搜索">
-        <span id="searchCount">0/0</span>
-        <button class="search-nav" id="searchPrev" disabled>‹</button>
-        <button class="search-nav" id="searchNext" disabled>›</button>
-        <button class="search-close" id="searchClose">✕</button>
-      </div>
     </div>
     <div class="grp">
       <button class="btn" id="printBtn" title="打印">
@@ -712,6 +712,15 @@
     <svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
     <span>跳转至上次阅读位置</span>
   </button>
+</div>
+
+<!-- ── 搜索浮框 ── -->
+<div class="search-bar" id="searchBar">
+  <input id="searchInput" type="text" placeholder="搜索">
+  <span id="searchCount">0/0</span>
+  <button class="search-nav" id="searchPrev" disabled>‹</button>
+  <button class="search-nav" id="searchNext" disabled>›</button>
+  <button class="search-close" id="searchClose">✕</button>
 </div>
 
 <input type="file" id="fileInput" accept="application/pdf" hidden>
