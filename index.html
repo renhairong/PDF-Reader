@@ -18,7 +18,7 @@
   #app{display:flex;flex-direction:column;height:100vh;}
   /* toolbar */
   #toolbar{
-    display:flex;align-items:center;justify-content:center;gap:4px;
+    display:flex;align-items:center;gap:4px;
     padding:10px 20px;
     background:rgba(255,255,255,.48);
     border-bottom:1px solid rgba(232,232,237,.3);
@@ -26,8 +26,15 @@
     backdrop-filter:saturate(150%) blur(24px);
     -webkit-backdrop-filter:saturate(150%) blur(24px);
     position:relative;z-index:10;
-    flex-wrap:wrap;
+    flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;
+    scrollbar-width:thin;
+    -webkit-overflow-scrolling:touch;
   }
+  /* 安全居中：内容放得下时居中，放不下时可滚动到最左 */
+  #toolbar::before,#toolbar::after{content:"";margin:auto}
+  #toolbar::-webkit-scrollbar{height:4px}
+  #toolbar::-webkit-scrollbar-thumb{background:rgba(128,128,128,.35);border-radius:2px}
+  #toolbar::-webkit-scrollbar-track{background:transparent}
   #appTitle{
     position:absolute;left:20px;top:50%;transform:translateY(-50%);
     display:flex;align-items:center;gap:6px;
