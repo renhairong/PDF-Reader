@@ -920,6 +920,100 @@ async function loadAnnotationsCache(fileId){
     annDataCache[a.pageNum].push(a);
   }
 }
+
+// ── 从 PDF 内置 Highlight 注释反推批注（方案 A：下载后的文件可继续编辑） ──
+// 去重键：页码 + rects 位置（忽略文字内容，用户改文字不会误判为新批注）
+function annPositionKey(ann){
+  return (ann.rects || []).map(r =>
+    `${r.left.toFixed(4)},${r.top.toFixed(4)},${r.width.toFixed(4)},${r.height.toFixed(4)}`
+  ).join(';');
+}
+const PDF_DELETED_KEY = 'pdfDeletedAnnKeys';
+function getPdfDeletedKeys(){
+  try { return JSON.parse(localStorage.getItem(PDF_DELETED_KEY)) || {}; } catch(e){ return {}; }
+}
+function addPdfDeletedKey(fileId, key){
+  const map = getPdfDeletedKeys();
+  if(!map[fileId]) map[fileId] = [];
+  if(!map[fileId].includes(key)) map[fileId].push(key);
+  try { localStorage.setItem(PDF_DELETED_KEY, JSON.stringify(map)); } catch(e){}
+}
+async function importAnnotationsFromPdf(){
+  if(!pdfDoc || !lastFileId) return;
+  // 已存在的 src:'pdf' 批注 + 用户删除过的位置 → 跳过，避免重复写入
+  const existingKeys = new Set();
+  try {
+    const all = await getAnnotations(lastFileId);
+    for(const a of all){
+      if(a.src === 'pdf') existingKeys.add(`${a.pageNum}|${annPositionKey(a)}`);
+    }
+    const del = getPdfDeletedKeys();
+    for(const k of (del[lastFileId] || [])) existingKeys.add(k);
+  } catch(e){}
+  let imported = 0;
+  for(let i = 1; i <= pdfDoc.numPages; i++){
+    let page;
+    try { page = await pdfDoc.getPage(i); } catch(e){ continue; }
+    const viewport = page.getViewport({ scale: 1 });
+    const pw = viewport.width, ph = viewport.height;
+    if(pw < 1 || ph < 1) continue;
+    let anns = [];
+    try { anns = await page.getAnnotations(); } catch(e){ continue; }
+    for(const a of anns){
+      if(a.annotationType !== 9) continue; // 只处理 Highlight 注释
+      const contents = (a.contentsObj && a.contentsObj.str) || '';
+      if(!contents) continue;
+      // quadPoints（每 8 个数一个四边形）→ 百分比 rects（左上原点）
+      const rects = [];
+      const qp = a.quadPoints;
+      if(qp && qp.length >= 8){
+        for(let q = 0; q + 7 < qp.length; q += 8){
+          const xs = [qp[q], qp[q+2], qp[q+4], qp[q+6]];
+          const ys = [qp[q+1], qp[q+3], qp[q+5], qp[q+7]];
+          const blX = Math.min(...xs), trX = Math.max(...xs);
+          const blY = Math.min(...ys), trY = Math.max(...ys);
+          rects.push({
+            left: blX / pw,
+            top: (ph - trY) / ph,
+            width: (trX - blX) / pw,
+            height: (trY - blY) / ph
+          });
+        }
+      } else if(a.rect){
+        const r = a.rect;
+        rects.push({
+          left: r[0] / pw,
+          top: (ph - r[3]) / ph,
+          width: (r[2] - r[0]) / pw,
+          height: (r[3] - r[1]) / ph
+        });
+      }
+      if(rects.length === 0) continue;
+      const key = `${i}|${annPositionKey({ rects })}`;
+      if(existingKeys.has(key)) continue;
+      const ann = {
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+        fileId: lastFileId,
+        pageNum: i,
+        text: '',
+        annotation: contents,
+        type: 'highlight',
+        rects,
+        bubX: rects[0].left,
+        bubY: rects[0].top,
+        color: '#FFD700',
+        createdAt: Date.now(),
+        src: 'pdf' // 标记来源：由 PDF 反推
+      };
+      await saveAnnotation(ann);
+      existingKeys.add(key);
+      imported++;
+    }
+  }
+  if(imported > 0){
+    loadAnnotationsCache(lastFileId).then(() => renderAllAnnotations());
+  }
+}
 function clearAnnotationsCache(){
   annDataCache = null;
 }
@@ -1373,6 +1467,8 @@ async function loadFile(file, options = {}){
     }
     // 预加载批注缓存（避免打开文件时异步读 IDB 导致闪烁）
     loadAnnotationsCache(lastFileId).then(() => setTimeout(renderAllAnnotations, 0));
+    // 反推 PDF 内置批注（下载后的修改版可继续编辑；按位置去重不重复写入）
+    importAnnotationsFromPdf();
     document.title = file.name || '云轩 PDF 阅读器 · 网页版';
     loadOutline();
     // 保存到最近打开记录（历史记录重开时只更新时间，不重复写文件数据）
@@ -2024,7 +2120,14 @@ annEditSave.addEventListener('click', () => {
 annEditDel.addEventListener('click', () => {
   const id = annEditText.dataset.aid;
   if(!id) return;
-  deleteAnnotation(id).then(() => {
+  getAnnotations(lastFileId).then(all => {
+    const target = all.find(a => a.id === id);
+    // PDF 反推的批注被删除时记录 tombstone，防止下次打开重复导入
+    if(target && target.src === 'pdf'){
+      addPdfDeletedKey(lastFileId, `${target.pageNum}|${annPositionKey(target)}`);
+    }
+    return deleteAnnotation(id);
+  }).then(() => {
     // 找到对应页码重新渲染
     for(let i = 1; pdfDoc && i <= pdfDoc.numPages; i++) renderAnnotations(i);
   });
