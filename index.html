@@ -2102,18 +2102,17 @@ annInputOk.addEventListener('click', () => {
 });
 
 // 编辑批注：保存修改
-annEditSave.addEventListener('click', () => {
+annEditSave.addEventListener('click', async () => {
   const id = annEditText.dataset.aid;
   if(!id) return;
   const newText = annEditText.value.trim();
-  getAnnotations(lastFileId).then(all => {
-    const target = all.find(a => a.id === id);
-    if(target){
-      target.annotation = newText;
-      saveAnnotation(target);
-      renderAnnotations(target.pageNum);
-    }
-  });
+  const all = await getAnnotations(lastFileId);
+  const target = all.find(a => a.id === id);
+  if(target){
+    target.annotation = newText;
+    await saveAnnotation(target); // 等缓存更新完再渲染，避免显示旧内容
+    renderAnnotations(target.pageNum);
+  }
   annEditOverlay.classList.remove('show');
 });
 // 编辑批注：删除
