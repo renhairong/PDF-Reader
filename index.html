@@ -538,6 +538,8 @@
   #settingsMenu .menu-item.active .check{opacity:1}
   #settingsMenu .menu-item + .menu-item{margin-top:2px;border-top:1px solid var(--line);padding-top:9px;}
   .hide-pdf-annotations .annotationLayer{display:none!important}
+  /* 我们自己已画了浅黄半透明矩形，pdf.js 的 Highlight 注释背景设为透明避免双重叠加变深 */
+  .annotationLayer .highlightAnnotation{background:transparent !important}
   /* 暗色模式下 PDF 内嵌批注（高亮/便签）补强可读性 */
   .dark .annotationLayer .popup{background-color:#fff8c8 !important;color:#1d1d1f !important;box-shadow:0 4px 16px rgba(0,0,0,.4) !important;}
   .dark .annotationLayer .popup *{color:#1d1d1f !important;}
