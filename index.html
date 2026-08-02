@@ -1839,6 +1839,7 @@ eventBus.on('updatefindcontrolstate', ({ matchesCount }) => {
 });
 
 pdfViewer.eventBus.on('scalechanging', updateZoomLabel);
+pdfViewer.eventBus.on('scalechanging', saveProgress);
 pdfViewer.eventBus.on('pagechanging', updatePageInfo);
 pdfViewer.eventBus.on('pagechanging', saveProgress);
 pdfViewer.eventBus.on('pagesloaded', updatePageInfo);
