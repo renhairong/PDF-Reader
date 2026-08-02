@@ -1394,7 +1394,9 @@ function saveProgress(){
   if(!pdfDoc||!lastFileName||!pdfViewer.currentPageNumber) return;
   try {
     localStorage.setItem(PROGRESS_KEY, JSON.stringify({
-      name: lastFileName, page: pdfViewer.currentPageNumber, time: Date.now()
+      name: lastFileName, page: pdfViewer.currentPageNumber,
+      scale: Math.round((pdfViewer.currentScale || 1) * 100) / 100,
+      time: Date.now()
     }));
   } catch(e) {}
 }
@@ -1450,7 +1452,9 @@ async function loadFile(file, options = {}){
       // 兜底超时 5s（极少数 PDF 没有 outline/pages 事件）
       setTimeout(()=>{ pdfViewer.eventBus.off('pagesloaded', h); resolve(); }, 5000);
     });
-    pdfViewer.currentScaleValue = 1;
+    // 恢复上次缩放比例（按文件名匹配；无记录则默认 100%）
+    const progScale = checkProgress(file.name || '');
+    pdfViewer.currentScaleValue = (progScale && progScale.scale > 0) ? progScale.scale : 1;
     applySpread();
     hideEmpty();
     hideLoading();
