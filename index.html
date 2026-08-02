@@ -1390,26 +1390,33 @@ async function loadOutline(){
 
 // ---------- 进度记忆 ----------
 const PROGRESS_KEY = 'pdfReaderLastProgress';
+// 多文件进度记录：PROGRESS_KEY 存 { [fileName]: { page, scale, time } }，每个文件独立记录互不覆盖
 function saveProgress(){
   if(!pdfDoc||!lastFileName||!pdfViewer.currentPageNumber) return;
   try {
-    localStorage.setItem(PROGRESS_KEY, JSON.stringify({
-      name: lastFileName, page: pdfViewer.currentPageNumber,
+    const all = JSON.parse(localStorage.getItem(PROGRESS_KEY)) || {};
+    all[lastFileName] = {
+      page: pdfViewer.currentPageNumber,
       scale: Math.round((pdfViewer.currentScale || 1) * 100) / 100,
       time: Date.now()
-    }));
+    };
+    localStorage.setItem(PROGRESS_KEY, JSON.stringify(all));
   } catch(e) {}
 }
 function checkProgress(fileName){
   try {
-    const d = JSON.parse(localStorage.getItem(PROGRESS_KEY));
-    if(d && d.name===fileName && d.page) return d;
+    const all = JSON.parse(localStorage.getItem(PROGRESS_KEY));
+    if(all && all[fileName] && all[fileName].page) return all[fileName];
   } catch(e) {}
   return null;
 }
 function dismissProgress(){
   progBanner.classList.remove('show');
-  localStorage.removeItem(PROGRESS_KEY);
+  try {
+    const all = JSON.parse(localStorage.getItem(PROGRESS_KEY)) || {};
+    delete all[lastFileName];
+    localStorage.setItem(PROGRESS_KEY, JSON.stringify(all));
+  } catch(e) {}
 }
 function hideProgress(){
   progBanner.classList.remove('show');
