@@ -1263,7 +1263,11 @@ function mergeRectsByLine(rects){
     let merged = false;
     for(const l of lines){
       if(l.top <= r.top + r.height && r.top <= l.top + l.height){
-        l.top = Math.min(l.top, r.top);
+        // 合并：取 top 最小（最高）、bottom 最大（最低）→ 行高 = max - min
+        const newTop = Math.min(l.top, r.top);
+        const newBottom = Math.max(l.top + l.height, r.top + r.height);
+        l.top = newTop;
+        l.height = newBottom - newTop;
         l.left = Math.min(l.left, r.left);
         l.right = Math.max(l.right, r.left + r.width);
         merged = true; break;
