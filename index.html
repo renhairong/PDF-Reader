@@ -2225,9 +2225,8 @@ async function detectWatermarks(){
     for(const it of items){
       let merged = false;
       for(const l of lines){
-        // y 范围重叠（容差 1.5% 页面高度）→ 视为同行
-        if(l.y <= it.y + it.h && it.y <= l.y + l.h &&
-           Math.abs((it.y + it.h/2) - (l.y + l.bottom - l.y)/2) < 0.015){
+        // y 范围重叠 → 视为同行（容差宽松，覆盖字符 baseline 微差）
+        if(l.y <= it.y + it.h && it.y <= l.y + l.h){
           l.text += it.str;
           l.x = Math.min(l.x, it.x);
           l.right = Math.max(l.right, it.x + it.w);
@@ -2267,13 +2266,13 @@ async function detectWatermarks(){
     for(const h of hits){
       const rect = pageRects[h.page].find(r => r.text === key);
       if(!rect) continue;
-      const pad = 0.006;
+      const padX = 0.015, padY = 0.006;   // 边距（左右略多覆盖 PDF advance width 不全）
       if(!watermarksByPage[h.page]) watermarksByPage[h.page] = [];
       watermarksByPage[h.page].push({
-        x: Math.max(0, rect.x - pad),
-        y: Math.max(0, rect.y - pad),
-        w: rect.w + pad * 2,
-        h: rect.h + pad * 2,
+        x: Math.max(0, rect.x - padX),
+        y: Math.max(0, rect.y - padY),
+        w: rect.w + padX * 2,
+        h: rect.h + padY * 2,
         src: 'text'
       });
     }
