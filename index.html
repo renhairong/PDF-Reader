@@ -318,6 +318,22 @@
     background:rgba(31,136,61,.35) !important;
     border-bottom-color:#2ea043 !important;
   }
+  /* 文本选区统一颜色（pdf.js 默认 25% 半透明蓝叠加不同底色 → 深浅条纹；统一低透明度色改善） */
+  .textLayer ::selection,
+  .textLayer span::selection{
+    background: rgba(0, 120, 215, 0.28) !important;
+    color: inherit !important;
+  }
+  .dark .textLayer ::selection,
+  .dark .textLayer span::selection{
+    background: rgba(90, 160, 230, 0.32) !important;
+  }
+  /* 消除 span 自带背景/混合模式干扰（排除查找高亮 .highlight，不破坏搜索功能） */
+  .textLayer span:not(.highlight):not(.highlight.selected){
+    background: transparent !important;
+    mix-blend-mode: normal !important;
+    opacity: 1 !important;
+  }
 
   /* ── 确认弹框 ── */
   #modalOverlay{
