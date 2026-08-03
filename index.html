@@ -1794,10 +1794,10 @@ async function buildModifiedPdf(){
             const h = r.height * height;
             pg.drawRectangle({ x, y, width: w, height: h, color: rgb(1, 0.83, 0), opacity: 0.35, borderWidth: 0, borderOpacity: 0 });
           }
-          // 原本会调 addHighlightAnnotation 写 PDF Highlight + Popup 注释，
-          // 让 WPS/Edge/Adobe 悬停显示批注内容。但 WPS 渲染 Highlight annotation 时会画 X 删除线穿过文字，
-          // 影响阅读体验。我们的 web 阅读器用 IndexedDB 批注数据，无需 PDF 注释即可查看批注内容，
-          // 所以这里不写 Highlight annotation，避免 WPS 的 X 删除线。
+          // 有批注内容的：额外写 Highlight + Popup 标准注释（Edge/Adobe 悬停或点击显示批注内容）
+          if(a.annotation && a.annotation.trim()){
+            addHighlightAnnotation(srcPdf, pg, rectsPdf, a.annotation.trim());
+          }
         }
       }
     }
