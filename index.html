@@ -376,8 +376,7 @@
   }
   #annMenu button:hover{background:#e8e8ed}
   .dark #annMenu button:hover{background:#3a3a40}
-  .ann-hl{border-radius:2px;pointer-events:none;mix-blend-mode:multiply;}
-  .dark .ann-hl{mix-blend-mode:screen;opacity:.5}
+  .ann-hl{border-radius:2px;pointer-events:none;}
   .ann-cvr{pointer-events:auto;cursor:default;}
   .ann-cvr-btn{
     display:none;position:absolute;left:50%;top:calc(100% + 4px);transform:translateX(-50%);
@@ -2128,10 +2127,29 @@ function showTempHighlight(){
   const div = document.createElement('div');
   div.className = 'anns';
   div.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:1;overflow:hidden;';
+  // 按 y 重叠合并成行（消除字符/词间的间隙，颜色均匀）
+  const lines = [];
   for(const r of annSelectedRects){
+    const top = r.top * ph;
+    const bottom = (r.top + r.height) * ph;
+    const left = r.left * pw;
+    const right = (r.left + r.width) * pw;
+    let merged = false;
+    for(const l of lines){
+      if(l.top <= bottom && top <= l.bottom){
+        l.top = Math.min(l.top, top);
+        l.bottom = Math.max(l.bottom, bottom);
+        l.left = Math.min(l.left, left);
+        l.right = Math.max(l.right, right);
+        merged = true; break;
+      }
+    }
+    if(!merged) lines.push({top, bottom, left, right});
+  }
+  for(const l of lines){
     const hl = document.createElement('div');
     hl.className = 'ann-hl';
-    hl.style.cssText = `position:absolute;left:${r.left*pw}px;top:${r.top*ph}px;width:${r.width*pw}px;height:${r.height*ph}px;background:rgba(255,212,0,.35);border-radius:2px;`;
+    hl.style.cssText = `position:absolute;left:${l.left}px;top:${l.top}px;width:${l.right - l.left}px;height:${l.bottom - l.top}px;background:rgba(255,212,0,.35);border-radius:2px;`;
     div.appendChild(hl);
   }
   pageEl.appendChild(div);
