@@ -1760,9 +1760,30 @@ async function buildModifiedPdf(){
             pg.drawRectangle({ x: r.x, y: r.y, width: r.w, height: r.h, color: rgb(1, 1, 1) });
           }
         } else {
-          // 高亮：画黄色矩形（保证所有阅读器可见背景）
+          // 高亮：按 y 范围合并成行再画（消除字符/词间间隙，颜色均匀）
+          const lines = [];
           for(const r of rectsPdf){
-            pg.drawRectangle({ x: r.x, y: r.y, width: r.w, height: r.h, color: rgb(1, 0.83, 0), opacity: 0.35 });
+            if(r.w < 0.1 || r.h < 0.1) continue;
+            // PDF 坐标 y 反向：bottom = r.y, top = r.y + r.h
+            const top = r.y + r.h;
+            const bottom = r.y;
+            const left = r.x;
+            const right = r.x + r.w;
+            let merged = false;
+            for(const l of lines){
+              // 行内 rect：bottom-top 范围重叠（PDF y 反向）
+              if(l.bottom <= top && bottom <= l.top){
+                l.top = Math.max(l.top, top);
+                l.bottom = Math.min(l.bottom, bottom);
+                l.left = Math.min(l.left, left);
+                l.right = Math.max(l.right, right);
+                merged = true; break;
+              }
+            }
+            if(!merged) lines.push({top, bottom, left, right});
+          }
+          for(const l of lines){
+            pg.drawRectangle({ x: l.left, y: l.bottom, width: l.right - l.left, height: l.top - l.bottom, color: rgb(1, 0.83, 0), opacity: 0.35 });
           }
           // 有批注内容的：额外写 Highlight + Popup 标准注释（悬停显示内容）
           if(a.annotation && a.annotation.trim()){
