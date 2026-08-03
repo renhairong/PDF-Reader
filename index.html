@@ -2266,7 +2266,7 @@ async function detectWatermarks(){
     for(const h of hits){
       const rect = pageRects[h.page].find(r => r.text === key);
       if(!rect) continue;
-      const padX = 0.015, padY = 0.006;   // 边距（左右略多覆盖 PDF advance width 不全）
+      const padX = 0.03, padY = 0.006;   // 边距（左/右各 3% 页面宽度，覆盖 PDF advance width 不全 + 右括号）
       if(!watermarksByPage[h.page]) watermarksByPage[h.page] = [];
       watermarksByPage[h.page].push({
         x: Math.max(0, rect.x - padX),
