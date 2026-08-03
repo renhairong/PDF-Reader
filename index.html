@@ -796,14 +796,25 @@ function updateSelectionLayer(){
   const range = sel.getRangeAt(0);
   const isDark = document.documentElement.classList.contains('dark');
   const color = isDark ? 'rgba(90,160,230,.32)' : 'rgba(0,120,215,.28)';
-  const rects = range.getClientRects();   // 视口坐标
+  const rects = range.getClientRects();
+  // 合并同行相邻的 rect（消除 span/字符间的微小间隙，避免文字重影）
+  const merged = [];
+  for(const r of rects){
+    if(r.width < 1 || r.height < 1) continue;
+    const last = merged[merged.length - 1];
+    if(last && Math.abs(last.top - r.top) < 3 && Math.abs(last.height - r.height) < 3 && last.right >= r.left - 2){
+      // 同行 + x 相邻 → 合并到上一个矩形
+      last.right = Math.max(last.right, r.right);
+      last.width = last.right - last.left;
+    } else {
+      merged.push({left: r.left, top: r.top, right: r.right, width: r.width, height: r.height});
+    }
+  }
   let any = false;
-  for(const rect of rects){
-    if(rect.width < 1 || rect.height < 1) continue;
+  for(const m of merged){
     const d = document.createElement('div');
-    // fixed 容器内用 absolute + viewport 坐标（fixed 不随滚动，rects 是 viewport 坐标）
-    d.style.cssText = `position:absolute;left:${rect.left}px;top:${rect.top}px;` +
-      `width:${rect.width}px;height:${rect.height}px;background:${color};border-radius:1px;`;
+    d.style.cssText = `position:absolute;left:${m.left}px;top:${m.top}px;` +
+      `width:${m.width}px;height:${m.height}px;background:${color};border-radius:1px;`;
     selLayer.appendChild(d);
     any = true;
   }
