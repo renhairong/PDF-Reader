@@ -784,25 +784,25 @@ let isTwoPage = false;
 const NARROW = 768;
 
 // ── 自定义选中高亮层（替代浏览器原生 ::selection，消除 span 间隙导致的条纹/深浅不一）──
+// 使用 body 级 fixed 覆盖层（避免 viewerContainer 的 stacking context / overflow 截断问题）
 const selLayer = document.createElement('div');
 selLayer.id = 'selLayer';
-selLayer.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:2;overflow:hidden;display:none;';
-container.appendChild(selLayer);
+selLayer.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:50;display:none;overflow:hidden;';
+document.body.appendChild(selLayer);
 function updateSelectionLayer(){
   selLayer.innerHTML = '';
   const sel = window.getSelection();
   if(!sel || sel.isCollapsed || sel.rangeCount === 0 || !pdfDoc){ selLayer.style.display = 'none'; return; }
   const range = sel.getRangeAt(0);
-  const containerRect = container.getBoundingClientRect();
   const isDark = document.documentElement.classList.contains('dark');
   const color = isDark ? 'rgba(90,160,230,.32)' : 'rgba(0,120,215,.28)';
-  const rects = range.getClientRects();
+  const rects = range.getClientRects();   // 视口坐标
   let any = false;
   for(const rect of rects){
     if(rect.width < 1 || rect.height < 1) continue;
-    if(rect.bottom < containerRect.top || rect.top > containerRect.bottom) continue;
     const d = document.createElement('div');
-    d.style.cssText = `position:absolute;left:${rect.left - containerRect.left}px;top:${rect.top - containerRect.top}px;` +
+    // fixed 容器内用 absolute + viewport 坐标（fixed 不随滚动，rects 是 viewport 坐标）
+    d.style.cssText = `position:absolute;left:${rect.left}px;top:${rect.top}px;` +
       `width:${rect.width}px;height:${rect.height}px;background:${color};border-radius:1px;`;
     selLayer.appendChild(d);
     any = true;
