@@ -318,11 +318,13 @@
     background:rgba(31,136,61,.35) !important;
     border-bottom-color:#2ea043 !important;
   }
-  /* 文本选区：原生 ::selection 完全透明（不画背景、不染色文字，避免多 span 重叠加粗）；
-     统一底色由 JS 自定义高亮层（#selLayer）绘制，文字保持透明 → canvas 下方黑色文字透出可见 */
+  /* 文本选区：原生 ::selection 背景透明（条纹来源），文字显示深色（textLayer 在顶层，清晰不被下方高亮层遮挡） */
   .textLayer ::selection{
     background: transparent !important;
-    color: transparent !important;
+    color: #1d1d1f !important;
+  }
+  .dark .textLayer ::selection{
+    color: #f5f5f7 !important;
   }
 
   /* ── 确认弹框 ── */
@@ -784,41 +786,43 @@ let isTwoPage = false;
 const NARROW = 768;
 
 // ── 自定义选中高亮层（替代浏览器原生 ::selection，消除 span 间隙导致的条纹/深浅不一）──
-// 使用 body 级 fixed 覆盖层（避免 viewerContainer 的 stacking context / overflow 截断问题）
-const selLayer = document.createElement('div');
-selLayer.id = 'selLayer';
-selLayer.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:50;display:none;overflow:hidden;';
-document.body.appendChild(selLayer);
+// 使用页面级高亮层（插到每个 .page 的 textLayer 之前 → 背景在 canvas 上、文字由 textLayer 顶层显示）
+// 这样选中文字（textLayer 原生 ::selection 深色）在背景之上，清晰不被遮挡；背景完整无条纹
+const SEL_COLOR = { light: 'rgba(0,120,215,.15)', dark: 'rgba(90,160,230,.18)' };
+function getPageSelLayer(page){
+  let layer = page.querySelector('.page-sel-layer');
+  if(!layer){
+    layer = document.createElement('div');
+    layer.className = 'page-sel-layer';
+    layer.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:0;overflow:hidden;';
+    const textLayer = page.querySelector('.textLayer');
+    if(textLayer) page.insertBefore(layer, textLayer);  // 在 textLayer 之前（canvas 之上、文字之下）
+    else page.appendChild(layer);
+  }
+  return layer;
+}
 function updateSelectionLayer(){
-  selLayer.innerHTML = '';
+  document.querySelectorAll('.page-sel-layer').forEach(l => l.innerHTML = '');
   const sel = window.getSelection();
-  if(!sel || sel.isCollapsed || sel.rangeCount === 0 || !pdfDoc){ selLayer.style.display = 'none'; return; }
+  if(!sel || sel.isCollapsed || sel.rangeCount === 0 || !pdfDoc) return;
   const range = sel.getRangeAt(0);
   const isDark = document.documentElement.classList.contains('dark');
-  const color = isDark ? 'rgba(90,160,230,.15)' : 'rgba(0,120,215,.12)';
+  const color = isDark ? SEL_COLOR.dark : SEL_COLOR.light;
   const rects = range.getClientRects();
-  // 合并同行相邻的 rect（消除 span/字符间的微小间隙，避免文字重影）
-  const merged = [];
   for(const r of rects){
     if(r.width < 1 || r.height < 1) continue;
-    const last = merged[merged.length - 1];
-    if(last && Math.abs(last.top - r.top) < 3 && Math.abs(last.height - r.height) < 3 && last.right >= r.left - 5){
-      // 同行 + x 相邻 → 合并到上一个矩形
-      last.right = Math.max(last.right, r.right);
-      last.width = last.right - last.left;
-    } else {
-      merged.push({left: r.left, top: r.top, right: r.right, width: r.width, height: r.height});
-    }
-  }
-  let any = false;
-  for(const m of merged){
+    // 用中心点命中页面（elementFromPoint 会穿透 pointer-events:none 的高亮层）
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    const el = document.elementFromPoint(cx, cy);
+    const page = el && el.closest('.pdfViewer .page');
+    if(!page) continue;
+    const layer = getPageSelLayer(page);
+    const pageRect = page.getBoundingClientRect();
     const d = document.createElement('div');
-    d.style.cssText = `position:absolute;left:${m.left}px;top:${m.top}px;` +
-      `width:${m.width}px;height:${m.height}px;background:${color};border-radius:1px;`;
-    selLayer.appendChild(d);
-    any = true;
+    d.style.cssText = `position:absolute;left:${r.left - pageRect.left}px;top:${r.top - pageRect.top}px;` +
+      `width:${r.width}px;height:${r.height}px;background:${color};border-radius:1px;`;
+    layer.appendChild(d);
   }
-  selLayer.style.display = any ? '' : 'none';
 }
 let selRaf = null;
 function scheduleSelectionLayer(){
