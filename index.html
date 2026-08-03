@@ -1762,8 +1762,6 @@ async function buildModifiedPdf(){
   const { PDFDocument, rgb } = await loadPdfLibModule();
   const srcPdf = await PDFDocument.load(pdfRawData.slice(0));
   const pages = srcPdf.getPages();
-  // 共享的 Highlight AP 外观（只画黄色背景，避免 WPS 把 Highlight 渲染成 X 删除线）
-  const hlApRef = makeHighlightAp(srcPdf);
   // 从缓存读取修正带/批注，写入 PDF 页面
   const cache = getCachedAnnotations();
   if(cache){
@@ -1787,17 +1785,10 @@ async function buildModifiedPdf(){
             pg.drawRectangle({ x: r.x, y: r.y, width: r.w, height: r.h, color: rgb(1, 1, 1) });
           }
         } else {
-          // 高亮：按行合并，每行一个 Highlight 注释（每行自己的 Rect → AP 外观只覆盖该行文字）
-          const mergedPct = mergeRectsByLine(a.rects || []);
-          for(const r of mergedPct){
-            const rPdf = {
-              x: r.left * width,
-              y: (1 - r.top - r.height) * height,
-              w: r.width * width,
-              h: r.height * height
-            };
-            addHighlightAnnotation(srcPdf, pg, [rPdf], a.annotation || '', hlApRef);
-          }
+          // 高亮：一个批注 = 一个 Highlight 注释
+          // Rect = 所有 rects 的包围盒，QuadPoints = 每行一个四边形（精确覆盖文字）
+          // AP 外观按 QuadPoints 画黄色（不涂包围盒空白区域）→ 避免 X 删除线 + 不超出文字
+          addHighlightAnnotation(srcPdf, pg, rectsPdf, a.annotation || '');
         }
       }
     }
@@ -1806,27 +1797,34 @@ async function buildModifiedPdf(){
   return await srcPdf.save();
 }
 
-// 创建共享的 Highlight AP 外观（Form XObject：单位矩形，画 35% 黄色）
-// reader 会把 AP 内容从 BBox 缩放到 annotation Rect → 每个高亮都是黄色背景
+// 创建 Highlight 的 AP 外观（Form XObject：按 QuadPoints 画黄色矩形，每个四边形一行）
+// BBox = Rect 包围盒，内容用相对坐标画每行矩形 → 精确覆盖文字，不涂空白/不超出
 // WPS 看到 AP 会用 AP 渲染（只画黄色），不再把 Highlight 画成 X 删除线
-function makeHighlightAp(srcPdf){
-  const ctx = srcPdf.context;
+function makeHighlightAp(ctx, rect, quadPoints){
+  const [minX, minY, maxX, maxY] = rect;
+  const w = maxX - minX, h = maxY - minY;
   // ExtGState：fill alpha 0.35
   const gsRef = ctx.nextRef();
   ctx.assign(gsRef, ctx.obj({ Type: 'ExtGState', ca: 0.35 }));
-  // Form XObject 内容：q /GS1 gs 1 0.83 0 rg 0 0 1 1 re f Q
-  const apContent = 'q /GS1 gs 1 0.83 0 rg 0 0 1 1 re f Q';
+  // AP 内容：q /GS1 gs 1 0.83 0 rg <每行矩形> f Q（坐标相对 BBox 左下角）
+  let content = 'q /GS1 gs 1 0.83 0 rg ';
+  for(let i = 0; i < quadPoints.length; i += 8){
+    const x1 = quadPoints[i] - minX, y1 = quadPoints[i + 1] - minY;
+    const x3 = quadPoints[i + 4] - minX, y3 = quadPoints[i + 5] - minY;
+    content += `${x1} ${y1} ${x3 - x1} ${y3 - y1} re `;
+  }
+  content += 'f Q';
   const apDict = ctx.obj({
     Type: 'XObject', Subtype: 'Form',
-    BBox: [0, 0, 1, 1],
+    BBox: [0, 0, w, h],
     Resources: ctx.obj({ ExtGState: ctx.obj({ GS1: gsRef }) })
   });
-  return ctx.register(pdfLibModule.PDFRawStream.of(apDict, new TextEncoder().encode(apContent)));
+  return ctx.register(pdfLibModule.PDFRawStream.of(apDict, new TextEncoder().encode(content)));
 }
 
 // 写 PDF 标准高亮注释 + Popup 注释（Edge/Adobe 悬停/点击显示批注内容）
-// Highlight 引用共享的 AP 外观（只画黄色背景）→ WPS 不再把 Highlight 画成 X 删除线
-function addHighlightAnnotation(srcPdf, page, rectsPdf, text, apRef){
+// Highlight 引用自定义 AP 外观（按 QuadPoints 画黄色背景）→ WPS 不再画 X 删除线
+function addHighlightAnnotation(srcPdf, page, rectsPdf, text){
   const ctx = srcPdf.context;
   // 所有矩形的包围盒
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -1849,6 +1847,8 @@ function addHighlightAnnotation(srcPdf, page, rectsPdf, text, apRef){
     Open: false,
     Rect: [maxX + 5, minY, maxX + 5 + 200, minY + 60]
   }));
+  // 本批注自己的 AP 外观（按 QuadPoints 画黄色）
+  const apRef = makeHighlightAp(ctx, rect, quadPoints);
   // Highlight 注释（含 Popup 引用 + 自定义 AP 外观）
   const highlightRef = ctx.register(ctx.obj({
     Type: 'Annot', Subtype: 'Highlight',
