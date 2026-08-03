@@ -11,6 +11,17 @@
 **批注** — 选中文字 → 复制或添加批注，黄色高亮 + 气泡，悬停查看/点击编辑  
 **个性化** — 暗色/亮色模式、最近打开（5 条）、⚙️ 设置菜单（可隐藏 PDF 内嵌批注）
 
+## 预览
+
+**主题** — 亮色 / 暗色双模式
+<p><img src="docs/images/light-mode.png" width="49%"> <img src="docs/images/dark-mode.png" width="49%"></p>
+
+**阅读** — 双页对开 / 全文搜索高亮
+<p><img src="docs/images/two-page-view.png" width="49%"> <img src="docs/images/search-highlight.png" width="49%"></p>
+
+**批注** — 黄色高亮批注 / 批注注释弹框
+<p><img src="docs/images/annotation.png" width="49%"> <img src="docs/images/annotation-popup.png" width="49%"></p>
+
 ## 优势
 
 **即开即用** — 无需安装 App，浏览器打开即阅读，Mac / Windows / Linux / iPad 全平台兼容  
