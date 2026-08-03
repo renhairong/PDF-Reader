@@ -1148,9 +1148,10 @@ function applyAnnotationsToPage(pageEl, list){
   if(list.length > 0){
       for(const a of list){
         const isCover = a.type === 'cover';
-        for(const r of a.rects){
-          const hl = document.createElement('div');
-          if(isCover){
+        if(isCover){
+          // 修正带：每个 rect 一个 div（带撤回按钮）
+          for(const r of a.rects){
+            const hl = document.createElement('div');
             hl.className = 'ann-cvr';
             hl.style.cssText = `position:absolute;left:${r.left*pw}px;top:${r.top*ph}px;width:${r.width*pw}px;height:${r.height*ph}px;background:#fff;`;
             const btn = document.createElement('div');
@@ -1161,7 +1162,6 @@ function applyAnnotationsToPage(pageEl, list){
             hl.addEventListener('click', function(e){
               e.stopPropagation();
               const showing = btn.style.display === 'block';
-              // 关闭所有其他修正带的撤回按钮
               document.querySelectorAll('.ann-cvr-btn').forEach(b => b.style.display = 'none');
               if(!showing) btn.style.display = 'block';
             });
@@ -1172,11 +1172,37 @@ function applyAnnotationsToPage(pageEl, list){
                 for(let i = 1; pdfDoc && i <= pdfDoc.numPages; i++) renderAnnotations(i);
               });
             });
-          } else {
-            hl.className = 'ann-hl';
-            hl.style.cssText = `position:absolute;left:${r.left*pw}px;top:${r.top*ph}px;width:${r.width*pw}px;height:${r.height*ph}px;background:rgba(255,212,0,.35);pointer-events:none;border-radius:2px;`;
+            div.appendChild(hl);
           }
-          div.appendChild(hl);
+        } else {
+          // 高亮：按 y 重叠合并成行（消除字符/词间的间隙，颜色均匀）
+          const lines = [];
+          for(const r of a.rects){
+            if(r.width < 1 || r.height < 1) continue;
+            const top = r.top * ph;
+            const bottom = (r.top + r.height) * ph;
+            const left = r.left * pw;
+            const right = (r.left + r.width) * pw;
+            let merged = false;
+            for(const l of lines){
+              if(l.top <= bottom && top <= l.bottom){
+                l.top = Math.min(l.top, top);
+                l.bottom = Math.max(l.bottom, bottom);
+                l.left = Math.min(l.left, left);
+                l.right = Math.max(l.right, right);
+                merged = true; break;
+              }
+            }
+            if(!merged){
+              lines.push({top, bottom, left, right});
+            }
+          }
+          for(const l of lines){
+            const hl = document.createElement('div');
+            hl.className = 'ann-hl';
+            hl.style.cssText = `position:absolute;left:${l.left}px;top:${l.top}px;width:${l.right - l.left}px;height:${l.bottom - l.top}px;background:rgba(255,212,0,.35);pointer-events:none;border-radius:2px;`;
+            div.appendChild(hl);
+          }
         }
         if(isCover) continue;
         const bub = document.createElement('span');
