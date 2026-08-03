@@ -2209,8 +2209,10 @@ async function detectWatermarks(){
     const tc = await page.getTextContent();
     const items = tc.items.filter(it => it.str && it.str.trim()).map(it => ({
       str: it.str.trim(),
+      // PDF transform[5] 是字符 baseline 的 Y（左下原点）→ 文字从 baseline 向上延伸 it.height
+      // 所以"文字顶部"在 baseline 之上的 height 距离 → 顶部页面 y = 1 - (baseline+height)/vp.height
       x: it.transform[4] / vp.width,
-      y: 1 - it.transform[5] / vp.height,   // 归一化到左上原点
+      y: 1 - (it.transform[5] + (it.height || 12)) / vp.height,   // 字符顶部（页面坐标系，左上原点）
       w: (it.width || it.str.length * 10) / vp.width,
       h: (it.height || 12) / vp.height
     }));
