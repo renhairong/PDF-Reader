@@ -795,14 +795,14 @@ function updateSelectionLayer(){
   if(!sel || sel.isCollapsed || sel.rangeCount === 0 || !pdfDoc){ selLayer.style.display = 'none'; return; }
   const range = sel.getRangeAt(0);
   const isDark = document.documentElement.classList.contains('dark');
-  const color = isDark ? 'rgba(90,160,230,.32)' : 'rgba(0,120,215,.28)';
+  const color = isDark ? 'rgba(90,160,230,.22)' : 'rgba(0,120,215,.18)';
   const rects = range.getClientRects();
   // 合并同行相邻的 rect（消除 span/字符间的微小间隙，避免文字重影）
   const merged = [];
   for(const r of rects){
     if(r.width < 1 || r.height < 1) continue;
     const last = merged[merged.length - 1];
-    if(last && Math.abs(last.top - r.top) < 3 && Math.abs(last.height - r.height) < 3 && last.right >= r.left - 2){
+    if(last && Math.abs(last.top - r.top) < 3 && Math.abs(last.height - r.height) < 3 && last.right >= r.left - 5){
       // 同行 + x 相邻 → 合并到上一个矩形
       last.right = Math.max(last.right, r.right);
       last.width = last.right - last.left;
