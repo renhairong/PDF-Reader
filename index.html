@@ -1762,6 +1762,8 @@ async function buildModifiedPdf(){
   const { PDFDocument, rgb } = await loadPdfLibModule();
   const srcPdf = await PDFDocument.load(pdfRawData.slice(0));
   const pages = srcPdf.getPages();
+  // 共享的 Highlight AP 外观（只画黄色背景，避免 WPS 把 Highlight 渲染成 X 删除线）
+  const hlApRef = makeHighlightAp(srcPdf);
   // 从缓存读取修正带/批注，写入 PDF 页面
   const cache = getCachedAnnotations();
   if(cache){
@@ -1785,19 +1787,9 @@ async function buildModifiedPdf(){
             pg.drawRectangle({ x: r.x, y: r.y, width: r.w, height: r.h, color: rgb(1, 1, 1) });
           }
         } else {
-          // 高亮：复用百分比的 mergeRectsByLine（不依赖 PDF 坐标转换精度）→ 避免字符/词间间隙
-          const mergedPct = mergeRectsByLine(a.rects || []);
-          for(const r of mergedPct){
-            const x = r.left * width;
-            const y = (1 - r.top - r.height) * height;
-            const w = r.width * width;
-            const h = r.height * height;
-            pg.drawRectangle({ x, y, width: w, height: h, color: rgb(1, 0.83, 0), opacity: 0.35, borderWidth: 0, borderOpacity: 0 });
-          }
-          // 有批注内容的：额外写 Highlight + Popup 标准注释（Edge/Adobe 悬停或点击显示批注内容）
-          if(a.annotation && a.annotation.trim()){
-            addHighlightAnnotation(srcPdf, pg, rectsPdf, a.annotation.trim());
-          }
+          // 高亮：写 PDF 标准 Highlight + Popup 注释
+          // 黄色背景由 AP 外观提供（不再画内容流矩形，避免与 AP 双重叠加变深）
+          addHighlightAnnotation(srcPdf, pg, rectsPdf, a.annotation || '', hlApRef);
         }
       }
     }
@@ -1806,8 +1798,27 @@ async function buildModifiedPdf(){
   return await srcPdf.save();
 }
 
-// 写 PDF 标准高亮注释 + Popup 注释（悬停/点击显示批注内容）
-function addHighlightAnnotation(srcPdf, page, rectsPdf, text){
+// 创建共享的 Highlight AP 外观（Form XObject：单位矩形，画 35% 黄色）
+// reader 会把 AP 内容从 BBox 缩放到 annotation Rect → 每个高亮都是黄色背景
+// WPS 看到 AP 会用 AP 渲染（只画黄色），不再把 Highlight 画成 X 删除线
+function makeHighlightAp(srcPdf){
+  const ctx = srcPdf.context;
+  // ExtGState：fill alpha 0.35
+  const gsRef = ctx.nextRef();
+  ctx.assign(gsRef, ctx.obj({ Type: 'ExtGState', ca: 0.35 }));
+  // Form XObject 内容：q /GS1 gs 1 0.83 0 rg 0 0 1 1 re f Q
+  const apContent = 'q /GS1 gs 1 0.83 0 rg 0 0 1 1 re f Q';
+  const apDict = ctx.obj({
+    Type: 'XObject', Subtype: 'Form',
+    BBox: [0, 0, 1, 1],
+    Resources: ctx.obj({ ExtGState: ctx.obj({ GS1: gsRef }) })
+  });
+  return ctx.register(pdfLibModule.PDFRawStream.of(apDict, new TextEncoder().encode(apContent)));
+}
+
+// 写 PDF 标准高亮注释 + Popup 注释（Edge/Adobe 悬停/点击显示批注内容）
+// Highlight 引用共享的 AP 外观（只画黄色背景）→ WPS 不再把 Highlight 画成 X 删除线
+function addHighlightAnnotation(srcPdf, page, rectsPdf, text, apRef){
   const ctx = srcPdf.context;
   // 所有矩形的包围盒
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -1823,24 +1834,27 @@ function addHighlightAnnotation(srcPdf, page, rectsPdf, text){
   }
   // 中文字符串必须用 UTF-16BE + BOM 编码（PDFHexString.fromText）
   // 注意：ctx.obj() 里的字符串会被转成 PDFName，所以创建时不含 Contents，之后单独 set PDFHexString
-  const pdfHexString = pdfLibModule.PDFHexString.fromText(text);
+  const pdfHexString = text && text.trim() ? pdfLibModule.PDFHexString.fromText(text) : null;
   // Popup 注释（Contents + Parent 稍后回填）
   const popupRef = ctx.register(ctx.obj({
     Type: 'Annot', Subtype: 'Popup',
     Open: false,
     Rect: [maxX + 5, minY, maxX + 5 + 200, minY + 60]
   }));
-  // Highlight 注释（含 Popup 引用）
+  // Highlight 注释（含 Popup 引用 + 自定义 AP 外观）
   const highlightRef = ctx.register(ctx.obj({
     Type: 'Annot', Subtype: 'Highlight',
     Rect: rect,
     QuadPoints: quadPoints,
     C: [1, 0.83, 0],
-    Popup: popupRef
+    Popup: popupRef,
+    AP: ctx.obj({ N: apRef })
   }));
   // 设置 UTF-16 编码的批注内容
-  ctx.lookup(highlightRef).set(ctx.obj('Contents'), pdfHexString);
-  ctx.lookup(popupRef).set(ctx.obj('Contents'), pdfHexString);
+  if(pdfHexString){
+    ctx.lookup(highlightRef).set(ctx.obj('Contents'), pdfHexString);
+    ctx.lookup(popupRef).set(ctx.obj('Contents'), pdfHexString);
+  }
   // Popup 的 Parent 回指 Highlight（互相引用）
   ctx.lookup(popupRef).set(ctx.obj('Parent'), highlightRef);
   // 两个都加入页面 /Annots（pdf.js 需要 popup 也在 Annots 里才能渲染并绑定 hover）
