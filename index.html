@@ -2119,6 +2119,7 @@ window.addEventListener('keydown', e => {
   if(annMenu.classList.contains('show')){ annMenu.classList.remove('show'); return; }
   if(searchBar.classList.contains('show')){
     searchBar.classList.remove('show');
+    searchBtn.classList.remove('active');
     searchInput.value = '';
     clearSearch();
     return;
