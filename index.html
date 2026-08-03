@@ -1177,7 +1177,8 @@ function applyAnnotationsToPage(pageEl, list){
           // 高亮：按 y 重叠合并成行（消除字符/词间的间隙，颜色均匀）
           const lines = [];
           for(const r of a.rects){
-            if(r.width < 1 || r.height < 1) continue;
+            // r.width/r.height 是百分比（0-1），用极小值判断（< 0.001 = 万分之一）避免误跳过
+            if(r.width < 0.001 || r.height < 0.001) continue;
             const top = r.top * ph;
             const bottom = (r.top + r.height) * ph;
             const left = r.left * pw;
