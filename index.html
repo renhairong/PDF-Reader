@@ -2108,6 +2108,32 @@ window.addEventListener('keydown', e => {
   }
 });
 
+// Esc 关闭各种弹框（优先级：模态弹框 > 浮窗 > 进度横幅）
+window.addEventListener('keydown', e => {
+  if(e.key !== 'Escape') return;
+  // 1. 模态弹框：批注输入 → 批注编辑 → 确认框
+  if(annInputOverlay.classList.contains('show')){ annInputOverlay.classList.remove('show'); return; }
+  if(annEditOverlay.classList.contains('show')){ annEditOverlay.classList.remove('show'); return; }
+  if(modalOverlay.classList.contains('show')){ modalOverlay.classList.remove('show'); return; }
+  // 2. 浮窗类：批注菜单 → 搜索框 → 设置菜单 → 目录侧栏
+  if(annMenu.classList.contains('show')){ annMenu.classList.remove('show'); return; }
+  if(searchBar.classList.contains('show')){
+    searchBar.classList.remove('show');
+    searchInput.value = '';
+    clearSearch();
+    return;
+  }
+  if(settingsMenu.classList.contains('show')){ settingsMenu.classList.remove('show'); return; }
+  if(tocPanel.classList.contains('show')){
+    tocPanel.classList.remove('show');
+    tocBtn.classList.remove('active');
+    document.getElementById('app').classList.remove('show-sidebar');
+    return;
+  }
+  // 3. 进度横幅
+  if(progBanner.classList.contains('show')){ dismissProgress(); }
+});
+
 // 单页/双页切换：仅通过工具栏按钮手动切换（移除了 V 快捷键，避免与 Ctrl+V 粘贴冲突）
 // window.addEventListener('keydown', e=>{
 //   if(e.target.tagName === 'INPUT') return;
