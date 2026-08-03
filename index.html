@@ -808,18 +808,34 @@ function updateSelectionLayer(){
   const isDark = document.documentElement.classList.contains('dark');
   const color = isDark ? SEL_COLOR.dark : SEL_COLOR.light;
   const rects = range.getClientRects();
+  // 按行分组（相同 y + 高度 → 一行）→ 每行一个矩形，填满行内全部 span 间隙，颜色完全均匀
+  const lines = [];
   for(const r of rects){
     if(r.width < 1 || r.height < 1) continue;
-    // 用中心点命中页面（elementFromPoint 会穿透 pointer-events:none 的高亮层）
-    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    let line = null;
+    for(const l of lines){
+      if(Math.abs(l.top - r.top) < 4 && Math.abs(l.height - r.height) < 4){
+        line = l; break;
+      }
+    }
+    if(line){
+      line.left = Math.min(line.left, r.left);
+      line.right = Math.max(line.right, r.right);
+    } else {
+      lines.push({top: r.top, height: r.height, left: r.left, right: r.right});
+    }
+  }
+  for(const ln of lines){
+    const cx = ln.left + (ln.right - ln.left) / 2;
+    const cy = ln.top + ln.height / 2;
     const el = document.elementFromPoint(cx, cy);
     const page = el && el.closest('.pdfViewer .page');
     if(!page) continue;
     const layer = getPageSelLayer(page);
     const pageRect = page.getBoundingClientRect();
     const d = document.createElement('div');
-    d.style.cssText = `position:absolute;left:${r.left - pageRect.left}px;top:${r.top - pageRect.top}px;` +
-      `width:${r.width}px;height:${r.height}px;background:${color};border-radius:1px;`;
+    d.style.cssText = `position:absolute;left:${ln.left - pageRect.left}px;top:${ln.top - pageRect.top}px;` +
+      `width:${ln.right - ln.left}px;height:${ln.height}px;background:${color};`;
     layer.appendChild(d);
   }
 }
