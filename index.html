@@ -1806,9 +1806,18 @@ function makeHighlightAp(ctx, rect, quadPoints){
   // ExtGState：fill alpha 0.35
   const gsRef = ctx.nextRef();
   ctx.assign(gsRef, ctx.obj({ Type: 'ExtGState', ca: 0.35 }));
-  // AP 内容：q /GS1 gs 1 0.83 0 rg <整段矩形> f Q
-  // 整段 Rect 范围涂黄（含行间），无任何间隙；坐标相对 BBox 左下角
-  const content = `q /GS1 gs 1 0.83 0 rg 0 0 ${w} ${h} re f Q`;
+  // AP 内容：按 QuadPoints 每行画矩形，每行略微扩展 0.8pt 覆盖字符渲染间隙
+  // （Safari/Edge 字符 baseline 与矩形边沿可能有 1px 间隙，扩展后无间隙）
+  // 行间不涂黄（行间保留白色，符合网页端渲染）
+  const xPad = 0.8;  // 左右扩展 0.8pt
+  const yPad = 0.8;  // 上下扩展 0.8pt
+  let content = 'q /GS1 gs 1 0.83 0 rg ';
+  for(let i = 0; i < quadPoints.length; i += 8){
+    const x1 = quadPoints[i] - minX, y1 = quadPoints[i + 1] - minY;
+    const x3 = quadPoints[i + 4] - minX, y3 = quadPoints[i + 5] - minY;
+    content += `${x1 - xPad} ${y1 - yPad} ${x3 - x1 + 2 * xPad} ${y3 - y1 + 2 * yPad} re `;
+  }
+  content += 'f Q';
   const apDict = ctx.obj({
     Type: 'XObject', Subtype: 'Form',
     BBox: [0, 0, w, h],
