@@ -2288,7 +2288,31 @@ annInputClose.addEventListener('click', () => {
 // 确认保存
 annInputOk.addEventListener('click', () => {
   const ann = annInputText.value.trim();
-  if(!ann || !annSelectedRects) return;
+  if(!ann || !annSelectedPage) return;
+  // 优先用当前 selection（如果还在）覆盖 mouseup 时的 rects → 浮窗可能中断了 selection 但这里能拿完整
+  const sel = window.getSelection();
+  if(sel && !sel.isCollapsed && sel.rangeCount > 0){
+    try {
+      const range = sel.getRangeAt(0);
+      const rects = Array.from(range.getClientRects()).filter(r => r.width > 2 && r.height > 2);
+      const node = range.startContainer.nodeType === 1 ? range.startContainer : range.startContainer.parentElement;
+      const pageEl = node && node.closest && node.closest('.pdfViewer .page');
+      if(pageEl && rects.length > 0){
+        const pn = parseInt(pageEl.dataset.pageNumber, 10);
+        if(pn === annSelectedPage){
+          const pr = pageEl.getBoundingClientRect();
+          if(pr.width > 1){
+            annSelectedRects = rects.map(r => ({
+              left: (r.left - pr.left) / pr.width,
+              top: (r.top - pr.top) / pr.height,
+              width: r.width / pr.width,
+              height: r.height / pr.height
+            }));
+          }
+        }
+      }
+    } catch(e){}
+  }
   renderAnnotation(ann, annSelectedRects, annSelectedPage, annSelectedText);
   annInputOverlay.classList.remove('show');
   hideAnnMenu();
