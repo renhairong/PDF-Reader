@@ -1255,7 +1255,27 @@ function renderAllAnnotations(){
   setTimeout(() => annEditText.focus(), 50);
 }
 
+// 通用工具：按 y 范围重叠合并 rects 为行（消除字符/词间间隙）— 用于保存/导出/渲染三处
+function mergeRectsByLine(rects){
+  const lines = [];
+  for(const r of rects){
+    if(!r || r.width < 0.001 || r.height < 0.001) continue;
+    let merged = false;
+    for(const l of lines){
+      if(l.top <= r.top + r.height && r.top <= l.top + l.height){
+        l.top = Math.min(l.top, r.top);
+        l.left = Math.min(l.left, r.left);
+        l.right = Math.max(l.right, r.left + r.width);
+        merged = true; break;
+      }
+    }
+    if(!merged) lines.push({top: r.top, height: r.height, left: r.left, right: r.left + r.width});
+  }
+  return lines.map(l => ({left: l.left, top: l.top, width: l.right - l.left, height: l.height}));
+}
+
 async function renderAnnotation(inputText, selectedRects, pageNum, selectedText, type){
+  const merged = mergeRectsByLine(selectedRects);
   const a = {
     id: Date.now() + '_' + Math.random().toString(36).slice(2, 6),
     fileId: lastFileId,
@@ -1263,13 +1283,14 @@ async function renderAnnotation(inputText, selectedRects, pageNum, selectedText,
     text: selectedText,
     annotation: inputText || '',
     type: type || 'highlight',
-    rects: selectedRects.map(r => ({ left: r.left, top: r.top, width: r.width, height: r.height })),
-    bubX: selectedRects[0].left,
-    bubY: selectedRects[0].top,
+    // 存储时就合并 → 渲染/导出都直接用行级 rect，避免每处单独合并
+    rects: merged,
+    bubX: merged[0].left,
+    bubY: merged[0].top,
     color: '#FFD700',
     createdAt: Date.now()
   };
-  await saveAnnotation(a); // 先写入再渲染，避免 IDB 读写竞态
+  await saveAnnotation(a);
   renderAnnotations(pageNum);
 }
 
@@ -1760,30 +1781,14 @@ async function buildModifiedPdf(){
             pg.drawRectangle({ x: r.x, y: r.y, width: r.w, height: r.h, color: rgb(1, 1, 1) });
           }
         } else {
-          // 高亮：按 y 范围合并成行再画（消除字符/词间间隙，颜色均匀）
-          const lines = [];
-          for(const r of rectsPdf){
-            if(r.w < 0.1 || r.h < 0.1) continue;
-            // PDF 坐标 y 反向：bottom = r.y, top = r.y + r.h
-            const top = r.y + r.h;
-            const bottom = r.y;
-            const left = r.x;
-            const right = r.x + r.w;
-            let merged = false;
-            for(const l of lines){
-              // 行内 rect：bottom-top 范围重叠（PDF y 反向）
-              if(l.bottom <= top && bottom <= l.top){
-                l.top = Math.max(l.top, top);
-                l.bottom = Math.min(l.bottom, bottom);
-                l.left = Math.min(l.left, left);
-                l.right = Math.max(l.right, right);
-                merged = true; break;
-              }
-            }
-            if(!merged) lines.push({top, bottom, left, right});
-          }
-          for(const l of lines){
-            pg.drawRectangle({ x: l.left, y: l.bottom, width: l.right - l.left, height: l.top - l.bottom, color: rgb(1, 0.83, 0), opacity: 0.35 });
+          // 高亮：复用百分比的 mergeRectsByLine（不依赖 PDF 坐标转换精度）→ 避免字符/词间间隙
+          const mergedPct = mergeRectsByLine(a.rects || []);
+          for(const r of mergedPct){
+            const x = r.left * width;
+            const y = (1 - r.top - r.height) * height;
+            const w = r.width * width;
+            const h = r.height * height;
+            pg.drawRectangle({ x, y, width: w, height: h, color: rgb(1, 0.83, 0), opacity: 0.35 });
           }
           // 有批注内容的：额外写 Highlight + Popup 标准注释（悬停显示内容）
           if(a.annotation && a.annotation.trim()){
