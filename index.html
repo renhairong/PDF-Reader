@@ -318,14 +318,11 @@
     background:rgba(31,136,61,.35) !important;
     border-bottom-color:#2ea043 !important;
   }
-  /* 文本选区：隐藏原生 ::selection 背景（span 间隙条纹来源），文字保留可见；
-     统一底色由 JS 自定义高亮层（#selLayer）绘制 */
+  /* 文本选区：原生 ::selection 完全透明（不画背景、不染色文字，避免多 span 重叠加粗）；
+     统一底色由 JS 自定义高亮层（#selLayer）绘制，文字保持透明 → canvas 下方黑色文字透出可见 */
   .textLayer ::selection{
     background: transparent !important;
-    color: #1d1d1f !important;
-  }
-  .dark .textLayer ::selection{
-    color: #f5f5f7 !important;
+    color: transparent !important;
   }
 
   /* ── 确认弹框 ── */
