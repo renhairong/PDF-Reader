@@ -1787,9 +1787,17 @@ async function buildModifiedPdf(){
             pg.drawRectangle({ x: r.x, y: r.y, width: r.w, height: r.h, color: rgb(1, 1, 1) });
           }
         } else {
-          // 高亮：写 PDF 标准 Highlight + Popup 注释
-          // 黄色背景由 AP 外观提供（不再画内容流矩形，避免与 AP 双重叠加变深）
-          addHighlightAnnotation(srcPdf, pg, rectsPdf, a.annotation || '', hlApRef);
+          // 高亮：按行合并，每行一个 Highlight 注释（每行自己的 Rect → AP 外观只覆盖该行文字）
+          const mergedPct = mergeRectsByLine(a.rects || []);
+          for(const r of mergedPct){
+            const rPdf = {
+              x: r.left * width,
+              y: (1 - r.top - r.height) * height,
+              w: r.width * width,
+              h: r.height * height
+            };
+            addHighlightAnnotation(srcPdf, pg, [rPdf], a.annotation || '', hlApRef);
+          }
         }
       }
     }
