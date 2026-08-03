@@ -826,10 +826,20 @@ function updateSelectionLayer(){
     }
   }
   for(const ln of lines){
+    // 用中心点命中页面（elementFromPoint 会穿透 pointer-events:none 的高亮层）
     const cx = ln.left + (ln.right - ln.left) / 2;
     const cy = ln.top + ln.height / 2;
+    let page = null;
     const el = document.elementFromPoint(cx, cy);
-    const page = el && el.closest('.pdfViewer .page');
+    page = el && el.closest('.pdfViewer .page');
+    // fallback：浮窗/工具栏遮挡时 elementFromPoint 失败，按 y 坐标找最近的页面
+    if(!page){
+      const pages = document.querySelectorAll('.pdfViewer .page');
+      for(const p of pages){
+        const pr = p.getBoundingClientRect();
+        if(cy >= pr.top && cy <= pr.bottom){ page = p; break; }
+      }
+    }
     if(!page) continue;
     const layer = getPageSelLayer(page);
     const pageRect = page.getBoundingClientRect();
