@@ -2198,65 +2198,87 @@ document.addEventListener('keydown', e => {
 
 // ── 识别水印 ──
 // 策略：
-//  A) 内容流文字水印：pdf.js 逐页 getTextContent → 跨页位置一致的文字块（≥50% 页数 + 文本相同）→ 判定为水印
+//  A) 内容流文字水印：按 y 行聚类（同一行的所有 PDF text item 合成一个矩形），跨页位置+文本一致 → 判定水印
 //  B) 注释水印：pdf-lib 扫描 Annots，Subtype ∈ {FreeText,Text,Stamp,Square} 且名称/内容含 watermark/wm/水印 → 水印
 async function detectWatermarks(){
   const pageCount = pdfDoc.numPages;
-  const pagesData = [];  // 每页 { w,h, items:[{str,x,y,w,h}] }  x/y/w/h 为相对页宽/页高的归一化值
+  const pagesData = [];
   for(let p = 1; p <= pageCount; p++){
     const page = await pdfDoc.getPage(p);
     const vp = page.getViewport({ scale: 1 });
     const tc = await page.getTextContent();
     const items = tc.items.filter(it => it.str && it.str.trim()).map(it => ({
       str: it.str.trim(),
-      // PDF transform[5] 是字符 baseline 的 Y（左下原点）→ 文字从 baseline 向上延伸 it.height
-      // 所以"文字顶部"在 baseline 之上的 height 距离 → 顶部页面 y = 1 - (baseline+height)/vp.height
+      // 字符顶部 = baseline 之上的 height 距离（页面坐标系，左上原点）
       x: it.transform[4] / vp.width,
-      y: 1 - (it.transform[5] + (it.height || 12)) / vp.height,   // 字符顶部（页面坐标系，左上原点）
+      y: 1 - (it.transform[5] + (it.height || 12)) / vp.height,
       w: (it.width || it.str.length * 10) / vp.width,
       h: (it.height || 12) / vp.height
     }));
-    pagesData.push({ w: vp.width, h: vp.height, items });
+    pagesData.push(items);
   }
-  // 候选：文本长度≥2、在≥2 页出现
-  const textPages = {};   // str -> [ {page, x, y, w, h} ]
-  pagesData.forEach((pd, i) => {
-    pd.items.forEach(it => {
-      if(it.str.length < 2) return;
-      (textPages[it.str] = textPages[it.str] || []).push({ page: i + 1, ...it });
-    });
-  });
+  // 1. 按 y 行聚类：每页把所有 items 按 y 容差聚类，每行输出一个矩形（覆盖整行水印）
+  const pageRects = {};   // pageNum -> [{x,y,w,h,text}]
+  for(let pIdx = 0; pIdx < pagesData.length; pIdx++){
+    const items = pagesData[pIdx];
+    const lines = [];   // { text, x, y, right, bottom }
+    for(const it of items){
+      let merged = false;
+      for(const l of lines){
+        // y 范围重叠（容差 1.5% 页面高度）→ 视为同行
+        if(l.y <= it.y + it.h && it.y <= l.y + l.h &&
+           Math.abs((it.y + it.h/2) - (l.y + l.bottom - l.y)/2) < 0.015){
+          l.text += it.str;
+          l.x = Math.min(l.x, it.x);
+          l.right = Math.max(l.right, it.x + it.w);
+          l.bottom = Math.max(l.bottom, it.y + it.h);
+          merged = true; break;
+        }
+      }
+      if(!merged){
+        lines.push({ text: it.str, x: it.x, y: it.y, right: it.x + it.w, bottom: it.y + it.h });
+      }
+    }
+    pageRects[pIdx + 1] = lines.map(l => ({
+      x: l.x, y: l.y, w: l.right - l.x, h: l.bottom - l.y, text: l.text
+    }));
+  }
+  // 2. 跨页匹配：相同 text + 相同位置的行 → 水印（容差 2% 位置）
+  const matches = {};   // key -> [{page, rect}]
+  for(const pg in pageRects){
+    for(const r of pageRects[pg]){
+      // 跳过太短的行（单字符）、太长的行（≥40 字符可能是正文段）
+      if(r.text.length < 2 || r.text.length > 40) continue;
+      const key = r.text;
+      (matches[key] = matches[key] || []).push({ page: parseInt(pg), x: r.x, y: r.y });
+    }
+  }
   const threshold = Math.max(2, Math.floor(pageCount * 0.5));
-  const watermarksByPage = {};   // pageNum -> [rect]
-  const candidates = [];
-  for(const str in textPages){
-    const hits = textPages[str];
+  const watermarksByPage = {};
+  for(const key in matches){
+    const hits = matches[key];
     if(hits.length < threshold) continue;
-    // 位置聚类：跨页 x/y 近似（容差 3%）
+    // 检查跨页位置一致（x/y 标准差小）
     const xs = hits.map(h => h.x), ys = hits.map(h => h.y);
-    const avgX = xs.reduce((a,b)=>a+b,0)/xs.length;
-    const avgY = ys.reduce((a,b)=>a+b,0)/ys.length;
     const spreadX = Math.max(...xs) - Math.min(...xs);
     const spreadY = Math.max(...ys) - Math.min(...ys);
-    if(spreadX > 0.06 || spreadY > 0.06) continue;   // 位置不集中 → 不是水印（是正文）
-    candidates.push({ str, hits, avgX, avgY });
-  }
-  for(const c of candidates){
-    for(const h of c.hits){
+    if(spreadX > 0.04 || spreadY > 0.04) continue;   // 位置跨页不一致 → 不是水印
+    // 命中：把对应的 pageRects 中所有行（每页的该行）加入水印列表
+    for(const h of hits){
+      const rect = pageRects[h.page].find(r => r.text === key);
+      if(!rect) continue;
+      const pad = 0.006;
       if(!watermarksByPage[h.page]) watermarksByPage[h.page] = [];
-      // 扩展一点覆盖渲染间隙（与批注高亮同思路）
-      const pad = 0.004;
       watermarksByPage[h.page].push({
-        x: Math.max(0, h.x - pad),
-        y: Math.max(0, h.y - pad),
-        w: h.w + pad * 2,
-        h: h.h + pad * 2,
-        src: 'text',
-        str: c.str
+        x: Math.max(0, rect.x - pad),
+        y: Math.max(0, rect.y - pad),
+        w: rect.w + pad * 2,
+        h: rect.h + pad * 2,
+        src: 'text'
       });
     }
   }
-  // 合并同页相邻矩形（同 y 行合并，避免识别框密集）
+  // 合并同页相邻矩形
   const mergedByPage = {};
   for(const pg in watermarksByPage){
     mergedByPage[pg] = mergeWmRects(watermarksByPage[pg]);
