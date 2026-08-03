@@ -36,7 +36,7 @@
 
 <img src="docs/images/search-highlight.png">
 
-**批注**
+**添加批注**
 
 <img src="docs/images/annotation.png">
 
