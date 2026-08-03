@@ -1728,9 +1728,12 @@ printBtn.addEventListener('click', async () => {
     const url = URL.createObjectURL(blob);
     // Safari：iframe 用 off-screen 正常尺寸（Safari 不渲染隐藏/零尺寸 iframe → 预览空白）；
     //       首次打印需延迟等 PDF 真正就绪（Safari 会在文档未加载完就派发 print → 预览空白，第二次才正常）
+    // Edge/Chrome：保持 0 尺寸（onload 快，不等待整份 PDF 渲染 → 弹框快）
     const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
     const iframe = document.createElement('iframe');
-    iframe.style.cssText = 'position:absolute;left:-9999px;top:0;width:1000px;height:1000px;border:0;';
+    iframe.style.cssText = isSafari
+      ? 'position:absolute;left:-9999px;top:0;width:1000px;height:1000px;border:0;'
+      : 'position:fixed;right:100%;bottom:100%;width:0;height:0;border:0;';
     iframe.src = url;
     iframe.onload = () => {
       if(isSafari){
