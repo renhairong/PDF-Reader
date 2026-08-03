@@ -1792,7 +1792,7 @@ async function buildModifiedPdf(){
             const y = (1 - r.top - r.height) * height;
             const w = r.width * width;
             const h = r.height * height;
-            pg.drawRectangle({ x, y, width: w, height: h, color: rgb(1, 0.83, 0), opacity: 0.35 });
+            pg.drawRectangle({ x, y, width: w, height: h, color: rgb(1, 0.83, 0), opacity: 0.35, borderWidth: 0, borderOpacity: 0 });
           }
           // 有批注内容的：额外写 Highlight + Popup 标准注释（悬停显示内容）
           if(a.annotation && a.annotation.trim()){
