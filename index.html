@@ -808,21 +808,24 @@ function updateSelectionLayer(){
   const isDark = document.documentElement.classList.contains('dark');
   const color = isDark ? SEL_COLOR.dark : SEL_COLOR.light;
   const rects = range.getClientRects();
-  // 按行分组（相同 y + 高度 → 一行）→ 每行一个矩形，填满行内全部 span 间隙，颜色完全均匀
+  // 按行合并：同一行（y 范围重叠）所有 rect → 一个完整矩形（覆盖行内 span 间隙）
   const lines = [];
   for(const r of rects){
     if(r.width < 1 || r.height < 1) continue;
-    let line = null;
+    let merged = false;
     for(const l of lines){
-      if(Math.abs(l.top - r.top) < 4 && Math.abs(l.height - r.height) < 4){
-        line = l; break;
+      // y 范围有重叠 → 同一行
+      if(l.top <= r.top + r.height && r.top <= l.top + l.height){
+        l.top = Math.min(l.top, r.top);
+        l.bottom = Math.max(l.bottom, r.top + r.height);
+        l.height = l.bottom - l.top;
+        l.left = Math.min(l.left, r.left);
+        l.right = Math.max(l.right, r.right);
+        merged = true; break;
       }
     }
-    if(line){
-      line.left = Math.min(line.left, r.left);
-      line.right = Math.max(line.right, r.right);
-    } else {
-      lines.push({top: r.top, height: r.height, left: r.left, right: r.right});
+    if(!merged){
+      lines.push({top: r.top, bottom: r.top + r.height, height: r.height, left: r.left, right: r.right});
     }
   }
   for(const ln of lines){
@@ -845,7 +848,7 @@ function updateSelectionLayer(){
     const pageRect = page.getBoundingClientRect();
     const d = document.createElement('div');
     d.style.cssText = `position:absolute;left:${ln.left - pageRect.left}px;top:${ln.top - pageRect.top}px;` +
-      `width:${ln.right - ln.left}px;height:${ln.height}px;background:${color};`;
+      `width:${ln.right - ln.left}px;height:${ln.bottom - ln.top}px;background:${color};`;
     layer.appendChild(d);
   }
 }
