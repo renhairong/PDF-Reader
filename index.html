@@ -516,6 +516,95 @@
   .dark #annEditBox .btn-del{color:#e57373;border-color:#4a2c2a !important}
   .dark #annEditBox .btn-del:hover{background:#3a2828}
 
+  /* ── 去水印弹框 ── */
+  #wmOverlay{
+    position:fixed;inset:0;z-index:96;
+    background:rgba(0,0,0,.45);
+    display:none;align-items:center;justify-content:center;
+  }
+  #wmOverlay.show{display:flex}
+  .wm-modal{
+    width:520px;max-width:94vw;max-height:92vh;overflow:auto;
+    background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 24px 80px rgba(0,0,0,.3);
+    animation:scaleIn .14s ease;
+  }
+  .wm-head{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:14px 18px;border-bottom:1px solid var(--line);
+  }
+  .wm-head h3{font-size:15px;font-weight:600;color:var(--ink)}
+  .wm-close{
+    width:26px;height:26px;border:none;border-radius:50%;
+    background:var(--line);color:var(--sub);cursor:pointer;font-size:13px;
+    display:flex;align-items:center;justify-content:center;transition:all .12s;
+  }
+  .wm-close:hover{background:var(--sub);color:#fff}
+  .wm-body{padding:16px 18px}
+  .wm-preview-wrap{
+    background:var(--line);border-radius:10px;padding:12px;
+    position:relative;display:flex;align-items:center;justify-content:center;min-height:220px;
+  }
+  .wm-canvas{
+    background:#fff;border-radius:3px;max-width:100%;
+    box-shadow:0 1px 6px rgba(0,0,0,.15);
+    display:block;
+  }
+  .wm-stage{position:relative;display:inline-block}
+  .wm-boxes{position:absolute;inset:0;pointer-events:none}
+  .wm-box{
+    position:absolute;border:1.5px dashed rgba(10,132,255,.85);
+    background:rgba(10,132,255,.12);border-radius:2px;
+  }
+  .wm-loading{
+    position:absolute;inset:0;border-radius:10px;
+    background:rgba(255,255,255,.85);
+    display:none;flex-direction:column;align-items:center;justify-content:center;gap:10px;z-index:5;
+  }
+  .wm-loading.show{display:flex}
+  .wm-spinner{
+    width:26px;height:26px;border:3px solid var(--line);
+    border-top-color:var(--brand);border-radius:50%;animation:piSpin .8s linear infinite;
+  }
+  .wm-loading span{font-size:12px;color:var(--sub)}
+  .dark .wm-loading{background:rgba(28,28,32,.88)}
+  .dark .wm-loading span{color:#9a9aa0}
+  .wm-opts{display:flex;align-items:center;justify-content:space-between;margin-top:14px}
+  .wm-check{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--ink);cursor:pointer;user-select:none}
+  .wm-check input{width:15px;height:15px;accent-color:var(--brand);cursor:pointer}
+  .wm-pager{display:flex;align-items:center;gap:4px}
+  .pg-btn{
+    width:28px;height:28px;border:1px solid var(--line);background:var(--panel);
+    border-radius:6px;cursor:pointer;font-size:11px;color:var(--ink);
+    display:flex;align-items:center;justify-content:center;transition:all .12s;
+  }
+  .pg-btn:hover:not(:disabled){background:var(--line)}
+  .pg-btn:disabled{opacity:.35;cursor:default}
+  .pg-input{
+    width:42px;height:28px;border:1px solid var(--line);border-radius:6px;
+    text-align:center;font-size:13px;color:var(--ink);background:var(--panel);outline:none;
+  }
+  .pg-input:focus{border-color:var(--brand)}
+  .pg-sep{font-size:12px;color:var(--sub)}
+  .wm-result{margin-top:12px;font-size:12.5px;color:var(--sub);min-height:18px}
+  .wm-result b{color:var(--brand)}
+  .wm-result.ok{color:#1f9d4e}
+  .wm-result.err{color:#c0392b}
+  .dark .wm-result.ok{color:#4cbf6e}
+  .wm-footer{padding:14px 18px;border-top:1px solid var(--line)}
+  .wm-del{
+    width:100%;padding:12px;border:none;border-radius:9px;
+    background:var(--brand);color:#fff;font-size:15px;font-weight:600;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;gap:8px;transition:filter .12s;
+  }
+  .wm-del:hover:not(:disabled){filter:brightness(.92)}
+  .wm-del:disabled{opacity:.5;cursor:default}
+  .wm-mini-spin{
+    width:16px;height:16px;border:2px solid rgba(255,255,255,.4);
+    border-top-color:#fff;border-radius:50%;display:none;animation:piSpin .8s linear infinite;
+  }
+  .wm-del.loading .wm-mini-spin{display:block}
+
   /* settings dropdown menu */
   #settingsMenu{
     position:fixed;z-index:90;display:none;
@@ -625,6 +714,9 @@
       <button class="btn" id="downloadBtn" title="下载修改版 PDF">
         <svg class="dl-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v8"/><path d="M4.5 7.5L8 11l3.5-3.5"/><path d="M2.5 13.5h11"/></svg>
         <svg class="dl-spinner" style="display:none" width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5" stroke-dasharray="30 12"/></svg>
+      </button>
+      <button class="btn" id="wmBtn" title="去水印">
+        <svg width="16" height="16" viewBox="0 0 1024 1024" fill="currentColor"><path d="M684.864 138.922667l242.645333 242.645333a123.776 123.776 0 0 1 0 175.061333L661.098667 823.018667l149.077333 1.706666 13.162667 0.149334a38.442667 38.442667 0 1 1-0.874667 76.885333l-217.066667-2.453333-11.008-0.128-10.965333-0.128-13.504-0.149334-212.138667-2.410666a123.776 123.776 0 0 1-86.122666-36.245334l-154.069334-154.048a123.776 123.776 0 0 1 0-175.061333L509.802667 138.922667a123.776 123.776 0 0 1 175.061333 0z m-120.682667 54.4L341.269333 416.213333l308.672 308.650667-54.4 54.378667-308.650666-308.672-114.922667 114.944a46.890667 46.890667 0 0 0 0 66.304l154.069333 154.069333c8.661333 8.661333 20.373333 13.589333 32.618667 13.717333l191.402667 2.176h3.498666l319.573334-319.530666c17.493333-17.493333 18.282667-45.44 2.282666-63.850667l-2.282666-2.453333L630.485333 193.28a46.890667 46.890667 0 0 0-66.304 0z"/></svg>
       </button>
     </div>
     <div class="grp">
@@ -740,6 +832,51 @@
   <button class="search-nav" id="searchPrev" disabled>‹</button>
   <button class="search-nav" id="searchNext" disabled>›</button>
   <button class="search-close" id="searchClose">✕</button>
+</div>
+
+<!-- ── 去水印弹框 ── -->
+<div id="wmOverlay">
+  <div class="wm-modal">
+    <div class="wm-head">
+      <h3>🧹 去水印</h3>
+      <button class="wm-close" id="wmClose" title="关闭">✕</button>
+    </div>
+    <div class="wm-body">
+      <div class="wm-preview-wrap">
+        <div class="wm-stage">
+          <canvas class="wm-canvas" id="wmCanvas"></canvas>
+          <div class="wm-boxes" id="wmBoxes"></div>
+        </div>
+        <div class="wm-loading" id="wmLoading">
+          <div class="wm-spinner"></div>
+          <span id="wmLoadingText">正在识别水印…</span>
+        </div>
+      </div>
+      <div class="wm-opts">
+        <label class="wm-check">
+          <input type="checkbox" id="previewWm" checked>
+          预览水印效果
+        </label>
+        <div class="wm-pager">
+          <button class="pg-btn" id="wmPgFirst" title="首页">|◀</button>
+          <button class="pg-btn" id="wmPgPrev" title="上一页">◀</button>
+          <input class="pg-input" id="wmPgInput" value="1">
+          <span class="pg-sep" id="wmPgTotal">/ 1</span>
+          <button class="pg-btn" id="wmPgNext" title="下一页">▶</button>
+          <button class="pg-btn" id="wmPgLast" title="末页">▶|</button>
+        </div>
+      </div>
+      <div class="wm-result" id="wmResult">
+        <span id="wmResultText">识别中…</span>
+      </div>
+    </div>
+    <div class="wm-footer">
+      <button class="wm-del" id="wmDelBtn">
+        <span class="wm-mini-spin"></span>
+        <span id="wmDelLabel">删除水印</span>
+      </button>
+    </div>
+  </div>
 </div>
 
 <input type="file" id="fileInput" accept="application/pdf" hidden>
@@ -883,6 +1020,7 @@ const fsBtn     = document.getElementById('fsBtn');
 const dmBtn     = document.getElementById('dmBtn');
 const printBtn  = document.getElementById('printBtn');
 const downloadBtn = document.getElementById('downloadBtn');
+const wmBtn     = document.getElementById('wmBtn');
 const searchBtn  = document.getElementById('searchBtn');
 const searchBar  = document.getElementById('searchBar');
 const searchInput= document.getElementById('searchInput');
@@ -1986,6 +2124,352 @@ downloadBtn.addEventListener('click', async () => {
   const spinner = downloadBtn.querySelector('.dl-spinner');
   if(icon) icon.style.display = '';
   if(spinner) spinner.style.display = 'none';
+});
+
+// ═══════════════ 去水印 ═══════════════
+const wmOverlay   = document.getElementById('wmOverlay');
+const wmClose     = document.getElementById('wmClose');
+const wmCanvas    = document.getElementById('wmCanvas');
+const wmBoxes     = document.getElementById('wmBoxes');
+const wmLoading   = document.getElementById('wmLoading');
+const wmLoadingText = document.getElementById('wmLoadingText');
+const wmResultText = document.getElementById('wmResultText');
+const wmResult    = document.getElementById('wmResult');
+const wmDelBtn    = document.getElementById('wmDelBtn');
+const wmDelLabel  = document.getElementById('wmDelLabel');
+const wmPreview   = document.getElementById('previewWm');
+const wmPgInput   = document.getElementById('wmPgInput');
+const wmPgTotal   = document.getElementById('wmPgTotal');
+const wmPgFirst   = document.getElementById('wmPgFirst');
+const wmPgPrev    = document.getElementById('wmPgPrev');
+const wmPgNext    = document.getElementById('wmPgNext');
+const wmPgLast    = document.getElementById('wmPgLast');
+
+let wmCurPage = 1;          // 弹框当前预览页
+let wmWatermarks = null;    // { byPage: {pageNum: [rect...]}, count, annotationCount, textCount }
+let wmRecognized = false;   // 识别完成
+let wmRendering = false;    // 预览渲染中（防重入）
+
+// 打开弹框
+wmBtn.addEventListener('click', () => {
+  if(!pdfRawData || !pdfDoc){ showError('请先打开 PDF 文件'); return; }
+  wmOverlay.classList.add('show');
+  wmCurPage = 1;
+  wmPgInput.value = 1;
+  wmPgTotal.textContent = '/ ' + pdfDoc.numPages;
+  wmRecognized = false;
+  wmPreview.checked = true;
+  wmDelBtn.disabled = true;
+  wmDelBtn.classList.remove('loading');
+  wmDelLabel.textContent = '删除水印';
+  wmResult.classList.remove('ok', 'err');
+  wmResultText.textContent = '识别中…';
+  wmLoading.classList.add('show');
+  wmLoadingText.textContent = '正在识别水印…';
+  detectWatermarks().then(res => {
+    wmWatermarks = res;
+    wmRecognized = true;
+    wmLoading.classList.remove('show');
+    renderWmPreview();
+    if(res.count === 0){
+      wmResultText.textContent = '未发现水印';
+      wmDelBtn.disabled = true;
+    } else {
+      wmResultText.innerHTML = `识别到 <b>${res.count}</b> 处水印（注释 ${res.annotationCount} + 内容流 ${res.textCount}）`;
+      wmDelBtn.disabled = false;
+    }
+  }).catch(e => {
+    wmLoading.classList.remove('show');
+    wmResult.classList.add('err');
+    wmResultText.textContent = '识别失败：' + (e?.message || e);
+  });
+});
+function closeWmModal(){
+  wmOverlay.classList.remove('show');
+  wmWatermarks = null;
+  wmRecognized = false;
+}
+wmClose.addEventListener('click', closeWmModal);
+wmOverlay.addEventListener('click', e => { if(e.target === wmOverlay) closeWmModal(); });
+// Esc 关闭（已有全局 Esc 监听，这里补充去水印弹框）
+document.addEventListener('keydown', e => {
+  if(e.key === 'Escape' && wmOverlay.classList.contains('show')){ closeWmModal(); }
+});
+
+// ── 识别水印 ──
+// 策略：
+//  A) 内容流文字水印：pdf.js 逐页 getTextContent → 跨页位置一致的文字块（≥50% 页数 + 文本相同）→ 判定为水印
+//  B) 注释水印：pdf-lib 扫描 Annots，Subtype ∈ {FreeText,Text,Stamp,Square} 且名称/内容含 watermark/wm/水印 → 水印
+async function detectWatermarks(){
+  const pageCount = pdfDoc.numPages;
+  const pagesData = [];  // 每页 { w,h, items:[{str,x,y,w,h}] }  x/y/w/h 为相对页宽/页高的归一化值
+  for(let p = 1; p <= pageCount; p++){
+    const page = await pdfDoc.getPage(p);
+    const vp = page.getViewport({ scale: 1 });
+    const tc = await page.getTextContent();
+    const items = tc.items.filter(it => it.str && it.str.trim()).map(it => ({
+      str: it.str.trim(),
+      x: it.transform[4] / vp.width,
+      y: 1 - it.transform[5] / vp.height,   // 归一化到左上原点
+      w: (it.width || it.str.length * 10) / vp.width,
+      h: (it.height || 12) / vp.height
+    }));
+    pagesData.push({ w: vp.width, h: vp.height, items });
+  }
+  // 候选：文本长度≥2、在≥2 页出现
+  const textPages = {};   // str -> [ {page, x, y, w, h} ]
+  pagesData.forEach((pd, i) => {
+    pd.items.forEach(it => {
+      if(it.str.length < 2) return;
+      (textPages[it.str] = textPages[it.str] || []).push({ page: i + 1, ...it });
+    });
+  });
+  const threshold = Math.max(2, Math.floor(pageCount * 0.5));
+  const watermarksByPage = {};   // pageNum -> [rect]
+  const candidates = [];
+  for(const str in textPages){
+    const hits = textPages[str];
+    if(hits.length < threshold) continue;
+    // 位置聚类：跨页 x/y 近似（容差 3%）
+    const xs = hits.map(h => h.x), ys = hits.map(h => h.y);
+    const avgX = xs.reduce((a,b)=>a+b,0)/xs.length;
+    const avgY = ys.reduce((a,b)=>a+b,0)/ys.length;
+    const spreadX = Math.max(...xs) - Math.min(...xs);
+    const spreadY = Math.max(...ys) - Math.min(...ys);
+    if(spreadX > 0.06 || spreadY > 0.06) continue;   // 位置不集中 → 不是水印（是正文）
+    candidates.push({ str, hits, avgX, avgY });
+  }
+  for(const c of candidates){
+    for(const h of c.hits){
+      if(!watermarksByPage[h.page]) watermarksByPage[h.page] = [];
+      // 扩展一点覆盖渲染间隙（与批注高亮同思路）
+      const pad = 0.004;
+      watermarksByPage[h.page].push({
+        x: Math.max(0, h.x - pad),
+        y: Math.max(0, h.y - pad),
+        w: h.w + pad * 2,
+        h: h.h + pad * 2,
+        src: 'text',
+        str: c.str
+      });
+    }
+  }
+  // 合并同页相邻矩形（同 y 行合并，避免识别框密集）
+  const mergedByPage = {};
+  for(const pg in watermarksByPage){
+    mergedByPage[pg] = mergeWmRects(watermarksByPage[pg]);
+  }
+  // 注释层水印
+  const annotationCount = await scanAnnotationWatermarks(mergedByPage);
+  const total = Object.values(mergedByPage).reduce((s, arr) => s + arr.length, 0);
+  return { byPage: mergedByPage, count: total, annotationCount, textCount: total - annotationCount };
+}
+
+// 合并同页相邻水印矩形（y 范围重叠 + x 相邻）
+function mergeWmRects(rects){
+  const lines = [];
+  for(const r of rects){
+    if(r.w < 0.001 || r.h < 0.001) continue;
+    let merged = false;
+    for(const l of lines){
+      if(l.y <= r.y + r.h && r.y <= l.y + l.h){
+        l.y = Math.min(l.y, r.y);
+        l.h = Math.max(l.y + l.h, r.y + r.h) - l.y;
+        l.x = Math.min(l.x, r.x);
+        l.w = Math.max(l.x + l.w, r.x + r.w) - l.x;
+        l.str = l.str || r.str;
+        merged = true; break;
+      }
+    }
+    if(!merged) lines.push({ ...r });
+  }
+  return lines;
+}
+
+// 扫描注释层水印（pdf-lib）
+async function scanAnnotationWatermarks(mergedByPage){
+  try{
+    const { PDFDocument } = await loadPdfLibModule();
+    const srcPdf = await PDFDocument.load(pdfRawData.slice(0));
+    const pages = srcPdf.getPages();
+    let count = 0;
+    const ctx = srcPdf.context;
+    for(let i = 0; i < pages.length; i++){
+      const pn = i + 1;
+      const annots = pages[i].node.Annots();
+      if(!annots) continue;
+      const toRemove = [];
+      for(let j = 0; j < annots.size(); j++){
+        const ref = annots.get(j);
+        let d;
+        try { d = ctx.lookup(ref); if(!d) continue; } catch(e){ continue; }
+        let dict = d;
+        if(typeof d.get !== 'function') continue;
+        const sub = dict.get(ctx.obj('Subtype'));
+        const subStr = sub ? String(sub) : '';
+        if(!/FreeText|Text|Stamp|Square/.test(subStr)) continue;
+        const nm = dict.get(ctx.obj('Name'));
+        const auth = dict.get(ctx.obj('T'));
+        const contents = dict.get(ctx.obj('Contents'));
+        const hay = [String(nm||''), String(auth||''), String(contents||'')].join(' ').toLowerCase();
+        if(/watermark|\bwm\b|水印/.test(hay)){
+          toRemove.push(j);
+          // 加入页面水印列表（预览用）
+          let rectArr = [];
+          try { rectArr = dict.get(ctx.obj('Rect'))?.asArray?.() || []; } catch(e){}
+          if(rectArr.length === 4){
+            const [x1,y1,x2,y2] = rectArr.map(v => { try{ return v.asNumber(); }catch(e){ return 0; } });
+            const pgH = pages[i].getHeight();
+            const pgW = pages[i].getWidth();
+            if(x2 > x1 && y2 > y1){
+              (mergedByPage[pn] = mergedByPage[pn] || []).push({
+                x: x1 / pgW, y: 1 - y2 / pgH, w: (x2 - x1) / pgW, h: (y2 - y1) / pgH, src: 'annotation'
+              });
+            }
+          }
+        }
+      }
+      if(toRemove.length){
+        for(let j = toRemove.length - 1; j >= 0; j--) annots.remove(toRemove[j]);
+        count += toRemove.length;
+      }
+    }
+    return count;
+  }catch(e){ return 0; }
+}
+
+// ── 预览渲染（当前页）──
+async function renderWmPreview(){
+  if(!pdfDoc || wmRendering) return;
+  wmRendering = true;
+  try{
+    const page = await pdfDoc.getPage(wmCurPage);
+    const base = pdfViewer.currentScale || 1;
+    const scale = Math.max(0.5, Math.min(1.5, base));
+    const vp = page.getViewport({ scale });
+    const maxW = 400;
+    const drawScale = vp.width > maxW ? maxW / vp.width : 1;
+    wmCanvas.width = Math.floor(vp.width * drawScale);
+    wmCanvas.height = Math.floor(vp.height * drawScale);
+    wmCanvas.style.width = wmCanvas.width + 'px';
+    wmCanvas.style.height = wmCanvas.height + 'px';
+    const ctx2d = wmCanvas.getContext('2d');
+    await page.render({ canvasContext: ctx2d, viewport: page.getViewport({ scale: scale * drawScale }) }).promise;
+    // 识别框
+    wmBoxes.innerHTML = '';
+    const rects = (wmWatermarks && wmWatermarks.byPage[wmCurPage]) || [];
+    for(const r of rects){
+      const box = document.createElement('div');
+      box.className = 'wm-box';
+      box.style.left = (r.x * wmCanvas.width) + 'px';
+      box.style.top = (r.y * wmCanvas.height) + 'px';
+      box.style.width = (r.w * wmCanvas.width) + 'px';
+      box.style.height = (r.h * wmCanvas.height) + 'px';
+      wmBoxes.appendChild(box);
+    }
+    // 预览水印效果：默认显示识别框；取消勾选 → 白色覆盖模拟删除后效果
+    if(!wmPreview.checked){
+      wmBoxes.style.display = 'none';
+      for(const r of rects){
+        ctx2d.fillStyle = '#ffffff';
+        ctx2d.fillRect(r.x * wmCanvas.width, r.y * wmCanvas.height, r.w * wmCanvas.width, r.h * wmCanvas.height);
+      }
+    } else {
+      wmBoxes.style.display = '';
+    }
+  }catch(e){
+    console.warn('wm preview render error', e);
+  }
+  wmRendering = false;
+}
+wmPreview.addEventListener('change', () => { if(wmRecognized) renderWmPreview(); });
+
+// 翻页
+function wmSetPage(p){
+  p = Math.max(1, Math.min(pdfDoc.numPages, p));
+  wmCurPage = p;
+  wmPgInput.value = p;
+  renderWmPreview();
+}
+wmPgFirst.onclick = () => wmSetPage(1);
+wmPgPrev.onclick  = () => wmSetPage(wmCurPage - 1);
+wmPgNext.onclick  = () => wmSetPage(wmCurPage + 1);
+wmPgLast.onclick  = () => wmSetPage(pdfDoc.numPages);
+wmPgInput.addEventListener('keydown', e => { if(e.key === 'Enter') wmSetPage(parseInt(wmPgInput.value) || 1); });
+
+// ── 删除水印 → 生成修改版 PDF ──
+async function buildWatermarkStrippedPdf(){
+  const { PDFDocument, rgb } = await loadPdfLibModule();
+  const srcPdf = await PDFDocument.load(pdfRawData.slice(0));
+  const pages = srcPdf.getPages();
+  const ctx = srcPdf.context;
+  // 1. 删除注释层水印
+  for(const pg of pages){
+    const annots = pg.node.Annots();
+    if(!annots) continue;
+    const toRemove = [];
+    for(let j = 0; j < annots.size(); j++){
+      const ref = annots.get(j);
+      let d;
+      try { d = ctx.lookup(ref); if(!d) continue; } catch(e){ continue; }
+      if(typeof d.get !== 'function') continue;
+      const sub = d.get(ctx.obj('Subtype'));
+      if(!/FreeText|Text|Stamp|Square/.test(String(sub||''))) continue;
+      const hay = [String(d.get(ctx.obj('Name'))||''), String(d.get(ctx.obj('T'))||''), String(d.get(ctx.obj('Contents'))||'')].join(' ').toLowerCase();
+      if(/watermark|\bwm\b|水印/.test(hay)) toRemove.push(j);
+    }
+    for(let j = toRemove.length - 1; j >= 0; j--) annots.remove(toRemove[j]);
+  }
+  // 2. 覆盖内容流文字水印（白矩形）
+  if(wmWatermarks){
+    for(const pgStr in wmWatermarks.byPage){
+      const pi = parseInt(pgStr) - 1;
+      if(pi < 0 || pi >= pages.length) continue;
+      const pg = pages[pi];
+      const { width, height } = pg.getSize();
+      for(const r of wmWatermarks.byPage[pgStr]){
+        if(r.src === 'annotation') continue;  // 注释已删除，无需覆盖
+        const x = r.x * width;
+        const y = (1 - r.y - r.h) * height;
+        pg.drawRectangle({ x, y, width: r.w * width, height: r.h * height, color: rgb(1, 1, 1) });
+      }
+    }
+  }
+  return await srcPdf.save();
+}
+
+// 删除按钮
+wmDelBtn.addEventListener('click', async () => {
+  if(!wmRecognized || !wmWatermarks || wmDelBtn.classList.contains('loading')) return;
+  wmDelBtn.classList.add('loading');
+  wmDelBtn.disabled = true;
+  wmDelLabel.textContent = '正在删除水印…';
+  try{
+    const pdfBytes = await buildWatermarkStrippedPdf();
+    const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const name = (lastFileName || 'document.pdf').replace(/\.pdf$/i, '') + '_无水印.pdf';
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    // 存入最近打开（含处理后的字节）
+    try{ await saveRecentFile(name, new Uint8Array(pdfBytes)); }catch(e){}
+    wmResult.classList.add('ok');
+    wmResultText.textContent = `✅ 已删除 ${wmWatermarks.count} 处水印，文件已下载：${name}`;
+    wmDelLabel.textContent = '删除水印';
+    wmDelBtn.classList.remove('loading');
+    setTimeout(closeWmModal, 1800);
+  }catch(e){
+    wmDelBtn.classList.remove('loading');
+    wmDelBtn.disabled = false;
+    wmDelLabel.textContent = '删除水印';
+    wmResult.classList.add('err');
+    wmResultText.textContent = '处理失败：' + (e?.message || e);
+  }
 });
 
 // ── 搜索 ──
