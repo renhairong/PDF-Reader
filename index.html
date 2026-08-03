@@ -1708,6 +1708,16 @@ function addHighlightAnnotation(srcPdf, page, rectsPdf, text){
   page.node.addAnnot(popupRef);
 }
 
+// 判断当前文件是否有批注/修正带需要写入 PDF（无则直接用原始字节，跳过 buildModifiedPdf 加速）
+function hasAnnotationsToWrite(){
+  const cache = getCachedAnnotations();
+  if(!cache) return false;
+  for(const pn in cache){
+    if(cache[pn] && cache[pn].length > 0) return true;
+  }
+  return false;
+}
+
 // 引用 pdf-lib module（懒加载缓存）
 let pdfLibModule = null;
 async function loadPdfLibModule(){
@@ -1722,8 +1732,8 @@ printBtn.addEventListener('click', async () => {
   printBtn.querySelector('.pi-icon').style.display = 'none';
   printBtn.querySelector('.pi-spinner').style.display = '';
   try {
-    // 生成修改版 PDF
-    const pdfBytes = await buildModifiedPdf();
+    // 无批注/修正带时直接用原始 PDF 字节（跳过 buildModifiedPdf，大文件秒出弹框）
+    const pdfBytes = hasAnnotationsToWrite() ? await buildModifiedPdf() : pdfRawData;
     const blob = new Blob([pdfBytes], { type: 'application/pdf' });
     const url = URL.createObjectURL(blob);
     // Safari：iframe 用 off-screen 正常尺寸（Safari 不渲染隐藏/零尺寸 iframe → 预览空白）；
@@ -1789,8 +1799,8 @@ downloadBtn.addEventListener('click', async () => {
   downloadBtn.querySelector('.dl-icon').style.display = 'none';
   downloadBtn.querySelector('.dl-spinner').style.display = '';
   try {
-    // 生成修改版 PDF
-    const pdfBytes = await buildModifiedPdf();
+    // 无批注/修正带时直接用原始 PDF 字节（跳过 buildModifiedPdf，大文件秒出）
+    const pdfBytes = hasAnnotationsToWrite() ? await buildModifiedPdf() : pdfRawData;
     const blob = new Blob([pdfBytes], { type: 'application/pdf' });
     const url = URL.createObjectURL(blob);
     // 触发浏览器下载，保留原文件名（用户可自行改名）
