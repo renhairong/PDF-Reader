@@ -2099,10 +2099,11 @@ window.addEventListener('wheel', e => {
   pdfViewer.currentScale = e.deltaY < 0 ? cur * 1.1 : Math.max(0.1, cur / 1.1);
 }, { passive: false });
 
-window.addEventListener('keydown', e=>{
-  if(e.target.tagName === 'INPUT') return;
-  if(e.key === 'v' || e.key === 'V'){ setMode(!isTwoPage); }
-});
+// 单页/双页切换：仅通过工具栏按钮手动切换（移除了 V 快捷键，避免与 Ctrl+V 粘贴冲突）
+// window.addEventListener('keydown', e=>{
+//   if(e.target.tagName === 'INPUT') return;
+//   if(e.key === 'v' || e.key === 'V'){ setMode(!isTwoPage); }
+// });
 
 // drag & drop
 let dragDepth = 0;
