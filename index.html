@@ -2099,6 +2099,15 @@ window.addEventListener('wheel', e => {
   pdfViewer.currentScale = e.deltaY < 0 ? cur * 1.1 : Math.max(0.1, cur / 1.1);
 }, { passive: false });
 
+// Ctrl+F / Cmd+F → 打开应用内搜索框（拦截浏览器原生查找，体验统一）
+window.addEventListener('keydown', e => {
+  if((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f'){
+    e.preventDefault();
+    searchBtn.click();
+    searchInput.select();
+  }
+});
+
 // 单页/双页切换：仅通过工具栏按钮手动切换（移除了 V 快捷键，避免与 Ctrl+V 粘贴冲突）
 // window.addEventListener('keydown', e=>{
 //   if(e.target.tagName === 'INPUT') return;
