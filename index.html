@@ -1726,18 +1726,36 @@ printBtn.addEventListener('click', async () => {
     const pdfBytes = await buildModifiedPdf();
     const blob = new Blob([pdfBytes], { type: 'application/pdf' });
     const url = URL.createObjectURL(blob);
-    // 隐藏 iframe 加载 → 浏览器原生打印
+    // Safari：iframe 用 off-screen 正常尺寸（Safari 不渲染隐藏/零尺寸 iframe → 预览空白）；
+    //       首次打印需延迟等 PDF 真正就绪（Safari 会在文档未加载完就派发 print → 预览空白，第二次才正常）
+    const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
     const iframe = document.createElement('iframe');
-    iframe.style.cssText = 'position:fixed;right:100%;bottom:100%;width:0;height:0;border:0;';
+    iframe.style.cssText = 'position:absolute;left:-9999px;top:0;width:1000px;height:1000px;border:0;';
     iframe.src = url;
     iframe.onload = () => {
-      iframe.contentWindow.focus();
-      iframe.contentWindow.print();
-      // afterprint 在 iframe 场景不可靠，用定时器恢复按钮
-      setTimeout(() => {
-        printing = false;
+      if(isSafari){
+        // 延迟 1s 等 PDF 渲染完成再打印（社区验证的 Safari 首次空白修复）
+        setTimeout(() => {
+          iframe.contentWindow.focus();
+          iframe.contentWindow.print();
+        }, 1000);
+      } else {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+      }
+      // 恢复 loading：多信号 + 兜底
+      //   Chrome/Edge → iframe afterprint；Safari → 主窗口 focus/visibilitychange（关闭打印弹框回到页面必触发）
+      let restored = false;
+      const restore = () => {
+        if(restored) return;
+        restored = true;
         restorePrintBtn();
-      }, 1500);
+      };
+      try { iframe.contentWindow.addEventListener('afterprint', restore); } catch(e){}
+      window.addEventListener('focus', restore);
+      const visRestore = () => { if(document.visibilityState === 'visible') restore(); };
+      document.addEventListener('visibilitychange', visRestore);
+      setTimeout(restore, 10000); // 兜底
     };
     document.body.appendChild(iframe);
     // 60 秒后清理 iframe 资源
