@@ -2492,7 +2492,15 @@ async function buildWatermarkStrippedPdf(){
       for(let j = toRemove.length - 1; j >= 0; j--) annots.remove(toRemove[j]);
     }
     // 2. 内容流文字水印：字符串级删除（保留 xref/字体/ExtGState 引用，避免空白页面）
-    const totalRemoved = await stripWatermarks(srcPdf);
+    let totalRemoved = await stripWatermarks(srcPdf);
+    // 3. XObject Form 水印：清空内部内容流（不动页面引用/状态/字体）
+    try{
+      const blanked = blankXObjectWatermarks(srcPdf);
+      console.log('wm: blanked', blanked, 'XObject watermarks');
+      totalRemoved += blanked;
+    }catch(e){
+      console.warn('wm: blankXObjectWatermarks failed:', e.message);
+    }
     if(totalRemoved === 0){
       console.log('wm: no watermark string matched, returning original');
       return originalBytes;
@@ -2522,19 +2530,46 @@ function textToUTF16BEHex(s){
   return hex;
 }
 
-// 删除 XObject Form 水印引用块：用正则匹配完整的 `/Artifact <<...Subtype/Watermark...>> BDC ... EMC` 块
-// 避免 indexOf-based dict 匹配错误（之前保留 /Artifact 名字导致解析失败）
-function stripXObjectRefWatermark(contentStr){
-  // 匹配 `/Artifact << ... Subtype /Watermark ... >> BDC ... EMC`（跨多行、跨空白）
-  // 非贪婪 .*? 直到第一个 EMC
-  // 注意：MCID/Artifact 等 marked content tag 不一定是 /Artifact（可能是 /Span/P/...），但 Subtype /Watermark 是关键标志
-  const re = /\/[A-Za-z0-9_]+\s*<<[^<>]*\/Subtype\s*\/Watermark\b[^<>]*>>\s*BDC[\s\S]*?EMC/g;
-  let removed = 0;
-  const newStr = contentStr.replace(re, (match) => {
-    removed++;
-    return '';
-  });
-  return {str: newStr, removed};
+// 清空 PDF XObject Form 内部内容流（水印在 XObject 里时用）：
+//   - 找 /Subtype /Form 的 XObject（XObject Form 类型）
+//   - 清空其内容流为空白
+// 这样所有引用该 XObject 的页面（包括 BDC/EMC 标记块和正文位置）都显示空白，无水印
+// 不动页面引用 / 状态 / 字体引用 → 不会破坏排版
+function blankXObjectWatermarks(srcPdf){
+  // 找页眉装饰/水印 XObject 候选（每页 Resources.XObject 里的 Form）
+  const xobjRefs = new Set();   // 已清空的 XObject ref
+  let blanked = 0;
+  for(const pg of srcPdf.getPages()){
+    const xobjDict = pg.node.Resources();
+    if(!xobjDict || typeof xobjDict.get !== 'function') continue;
+    const xobjEntry = xobjDict.get(srcPdf.context.obj('XObject'));
+    if(!xobjEntry || typeof xobjEntry.entries !== 'function') continue;
+    for(const [name, ref] of xobjEntry.entries()){
+      if(xobjRefs.has(ref)) continue;
+      xobjRefs.add(ref);
+      try{
+        const stream = srcPdf.context.lookup(ref);
+        if(!stream || typeof stream.dict === 'undefined') continue;
+        const dict = stream.dict;
+        // 检查是否是 Form XObject（可能是 watermark/pagination）
+        const subtype = dict.get(srcPdf.context.obj('Subtype'));
+        const subtypeStr = subtype ? String(subtype) : '';
+        const typeStr = String(dict.get(srcPdf.context.obj('Type')) || '');
+        // Form 类型 + 可疑标识（Subtype=Pagination 或名字含 WM/Watermark）
+        const nameStr = String(name || '');
+        const isForm = subtypeStr === '/Form';
+        const isPagination = typeStr.includes('Pagination');
+        const isWMSuspect = /^[A-Z]+\d+$/.test(nameStr.replace(/^\//, '')) && (nameStr.includes('X') || nameStr.includes('WM'));
+        if(!isForm) continue;
+        // 简化判断：Form + 名字含 X 或 Watermark 特征
+        if(!isPagination && !isWMSuspect) continue;
+        // 清空内容流（最小有效内容流：q Q 保持 graphics state 平衡）
+        stream.contents = Buffer.from('q Q');
+        blanked++;
+      }catch(e){}
+    }
+  }
+  return blanked;
 }
 
 // 删除水印字符串字面量（UTF-16BE hex 形式）
@@ -2621,13 +2656,9 @@ async function stripWatermarkOnPage(pg, wmStrings, pageNum){
     totalRemoved += r2.removed;
     s.str = newStr;
     s.removed = r1.removed + r2.removed;
-    // 调试：打印 page 2 和 page 4 完整 BEFORE/AFTER（找误删的正文）
-    if(pageNum === 2 || pageNum === 4){
-      console.log('==== wm page', pageNum, 'full BEFORE (', s.decoded.length, 'chars) ====');
-      console.log(s.decoded);
-      console.log('==== wm page', pageNum, 'full AFTER (', newStr.length, 'chars) ====');
-      console.log(newStr);
-      console.log('==== end page', pageNum, '====');
+    // 调试：每页只显示前 150 字符 + 移除数
+    if(pageNum === 1){
+      console.log('wm page 1 r1=', r1.removed, 'r2=', r2.removed, 'len=', newStr.length);
     }
   }
   if(totalRemoved === 0) return 0;
