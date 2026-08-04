@@ -604,12 +604,6 @@
     border-top-color:#fff;border-radius:50%;display:none;animation:piSpin .8s linear infinite;
   }
   .wm-del.loading .wm-mini-spin{display:block}
-  .wm-dl{
-    width:100%;padding:11px;border:1px solid var(--brand);border-radius:9px;
-    background:var(--panel);color:var(--brand);font-size:14px;font-weight:600;cursor:pointer;
-    margin-top:8px;transition:all .12s;
-  }
-  .wm-dl:hover{background:var(--brand);color:#fff}
 
   /* settings dropdown menu */
   #settingsMenu{
@@ -879,10 +873,7 @@
     <div class="wm-footer">
       <button class="wm-del" id="wmDelBtn">
         <span class="wm-mini-spin"></span>
-        <span id="wmDelLabel">处理水印</span>
-      </button>
-      <button class="wm-dl" id="wmDlBtn" style="display:none">
-        <span id="wmDlLabel">下载去水印版</span>
+        <span id="wmDelLabel">批量处理水印</span>
       </button>
     </div>
   </div>
@@ -2104,6 +2095,7 @@ function restorePrintBtn(){
 }
 
 // ── 下载修改版 PDF ──
+// 优先级：去水印版（已处理）> 含批注的修改版 > 原始 PDF
 let downloading = false;
 downloadBtn.addEventListener('click', async () => {
   if(!pdfRawData || downloading){ showError(!pdfRawData ? '请先打开 PDF 文件' : '正在下载中'); return; }
@@ -2112,14 +2104,24 @@ downloadBtn.addEventListener('click', async () => {
   downloadBtn.querySelector('.dl-icon').style.display = 'none';
   downloadBtn.querySelector('.dl-spinner').style.display = '';
   try {
-    // 无批注/修正带时直接用原始 PDF 字节（跳过 buildModifiedPdf，大文件秒出）
-    const pdfBytes = hasAnnotationsToWrite() ? await buildModifiedPdf() : pdfRawData;
+    let pdfBytes, name;
+    if(wmProcessed){
+      // 当前 PDF 已在内存中处理去水印 → 直接下载内存字节（"原名"）
+      pdfBytes = pdfRawData;
+      name = lastFileName || 'modified.pdf';
+    } else if(hasAnnotationsToWrite()){
+      pdfBytes = await buildModifiedPdf();
+      name = lastFileName || 'modified.pdf';
+    } else {
+      pdfBytes = pdfRawData;
+      name = lastFileName || 'modified.pdf';
+    }
     const blob = new Blob([pdfBytes], { type: 'application/pdf' });
     const url = URL.createObjectURL(blob);
     // 触发浏览器下载，保留原文件名（用户可自行改名）
     const a = document.createElement('a');
     a.href = url;
-    a.download = lastFileName || 'modified.pdf';
+    a.download = name;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -2197,11 +2199,9 @@ function closeWmModal(){
   wmOverlay.classList.remove('show');
   wmWatermarks = null;
   wmRecognized = false;
-  wmStrippedBytes = null;
-  wmDlBtn.style.display = 'none';
   wmDelBtn.disabled = true;
   wmDelBtn.classList.remove('loading');
-  wmDelLabel.textContent = '处理水印';
+  wmDelLabel.textContent = '批量处理水印';
   wmResult.classList.remove('ok', 'err');
   wmResultText.textContent = '识别中…';
 }
@@ -2721,28 +2721,24 @@ async function replacePageContents(pg, pageW, pageH, wmRects){
   pg.node.set(ctx.obj('Contents'), newRef);
 }
 
-// 处理水印（不自动下载）→ 存储到 IndexedDB → 弹框内显示"下载去水印版"按钮
-let wmStrippedBytes = null;   // 处理后的 PDF 字节
-let wmStrippedName = '';
-const wmDlBtn = document.getElementById('wmDlBtn');
+// 处理水印：在内存中替换当前 PDF 为去水印版 → 关闭弹框 → 用户直接看到去水印效果
+// 真正下载由导航栏"下载"按钮负责
+let wmProcessed = false;   // 标记当前 pdfRawData 已是去水印版（让下载按钮知道）
 wmDelBtn.addEventListener('click', async () => {
   if(!wmRecognized || !wmWatermarks || wmDelBtn.classList.contains('loading')) return;
   wmDelBtn.classList.add('loading');
   wmDelBtn.disabled = true;
   wmDelLabel.textContent = '正在处理水印…';
-  wmDlBtn.style.display = 'none';
   try{
     const pdfBytes = await buildWatermarkStrippedPdf();
-    wmStrippedBytes = pdfBytes;
-    wmStrippedName = (lastFileName || 'document.pdf').replace(/\.pdf$/i, '') + '_无水印.pdf';
-    // 存入最近打开（让用户从最近打开列表点开下载）
-    try{ await saveRecentFile(wmStrippedName, new Uint8Array(pdfBytes)); }catch(e){}
+    // 替换内存中的源字节（不修改磁盘原文件）
+    pdfRawData = pdfBytes.slice(0);
+    wmProcessed = true;
     wmResult.classList.add('ok');
-    wmResultText.textContent = `✅ 已处理 ${wmWatermarks.count} 处水印，文件已保存到"最近打开"，可点击下方下载或从首页列表打开`;
+    wmResultText.textContent = `✅ 已处理 ${wmWatermarks.count} 处水印，请关闭弹框查看效果，或点导航栏"下载"保存无水印版`;
     wmDelLabel.textContent = '处理水印';
     wmDelBtn.classList.remove('loading');
     wmDelBtn.disabled = true;   // 处理后禁用重处理
-    wmDlBtn.style.display = '';
   }catch(e){
     wmDelBtn.classList.remove('loading');
     wmDelBtn.disabled = false;
@@ -2750,20 +2746,6 @@ wmDelBtn.addEventListener('click', async () => {
     wmResult.classList.add('err');
     wmResultText.textContent = '处理失败：' + (e?.message || e);
   }
-});
-
-// 下载去水印版（用户主动点击才下载）
-wmDlBtn.addEventListener('click', () => {
-  if(!wmStrippedBytes) return;
-  const blob = new Blob([wmStrippedBytes], { type: 'application/pdf' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = wmStrippedName || '去水印.pdf';
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 60000);
 });
 
 // ── 搜索 ──
