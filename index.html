@@ -2581,9 +2581,20 @@ async function decodePageStreams(pg){
 }
 
 // 单页处理：解压 → 删除水印 → 压缩写回
-async function stripWatermarkOnPage(pg, wmStrings){
+async function stripWatermarkOnPage(pg, wmStrings, pageNum){
   const streams = await decodePageStreams(pg);
   if(!streams.length) return 0;
+  // 调试：打印水印 hex 样本 + 内容流中是否有 hex 字符串字面量
+  if(pageNum === 1){
+    const sample = wmStrings.slice(0, 3).map(s => textToUTF16BEHex(s).slice(0, 40)).join(', ');
+    console.log('wm page 1 wmStrings hex samples:', sample);
+    const merged = streams.map(s => s.decoded).join(' ');
+    const hexStrings = merged.match(/<[0-9A-Fa-f]+>/g) || [];
+    console.log('wm page 1 total <hex strings>:', hexStrings.length, 'first 3:', hexStrings.slice(0, 3));
+    // 检查是否有 hex 字符串包含 'FEFF'（UTF-16BE BOM）
+    const bomCount = hexStrings.filter(h => h.includes('FEFF')).length;
+    console.log('wm page 1 hex with BOM (UTF-16BE):', bomCount);
+  }
   let totalRemoved = 0;
   for(const s of streams){
     const r = stripWatermarkFromContent(s.decoded, wmStrings);
@@ -2621,7 +2632,7 @@ async function stripWatermarks(srcPdf){
     const wmStrings = Array.from(wmStringsSet);
     if(!wmStrings.length) continue;
     try{
-      const removed = await stripWatermarkOnPage(pages[pageNum - 1], wmStrings);
+      const removed = await stripWatermarkOnPage(pages[pageNum - 1], wmStrings, pageNum);
       totalRemoved += removed;
     }catch(e){
       console.warn('wm: page', pgStr, 'strip failed:', e.message);
