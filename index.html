@@ -2578,11 +2578,17 @@ function opListItemToOperator(fn, args, ctx){
 }
 
 // 文字位置是否在水印矩形内
+// 字符 bounding box（PDF 左下原点）vs 水印矩形：任意重叠即视为水印 op
+// 字符宽 = fontSize * 1.2（估算，单个字符通常 < 字号）；高度 = fontSize * 1.2（包含 ascender/descender）
 function isTextInWatermark(tx, ty, fontSize, wmRects){
-  const tol = 3;
-  const cx = tx, cy = ty + fontSize / 2;
+  const charX0 = tx;
+  const charX1 = tx + fontSize * 1.2;
+  const charY0 = ty;
+  const charY1 = ty + fontSize * 1.2;
   for(const r of wmRects){
-    if(cx >= r.x - tol && cx <= r.x + r.w + tol && cy >= r.y - tol && cy <= r.y + r.h + tol) return true;
+    // bounding box 相交检测
+    if(charX1 >= r.x && charX0 <= r.x + r.w &&
+       charY1 >= r.y && charY0 <= r.y + r.h) return true;
   }
   return false;
 }
