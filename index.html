@@ -2598,13 +2598,17 @@ async function replacePageContents(pdfjsDoc, pageNum, wmRects, srcPdf){
   // pdfjsDoc: pdf.js PDFDocumentProxy（用 .getPage()，1-based）
   // srcPdf: pdf-lib PDFDocument（用 .getPages() 数组，0-based）
   const ctx = srcPdf.context;
-  // 用 pdf.js 拿 operatorList（worker 已处理 BI/ID/EI/inline image 等所有边界情况）
   const pdfjsPage = await pdfjsDoc.getPage(pageNum);
   const opList = await pdfjsPage.getOperatorList();
-  // 跟踪文字状态（PDF 左下原点，点坐标）
+  // 调试：第一页打印 wmRects 和前 5 个 text op 位置
+  if(pageNum === 1){
+    console.log('wmRects:', JSON.stringify(wmRects));
+    console.log('ops count:', opList.fnArray.length);
+  }
   let tx = 0, ty = 0, fontSize = 12;
   let removed = 0;
   const pdfOps = [];
+  let dbgTextCount = 0;
   for(let i = 0; i < opList.fnArray.length; i++){
     const fn = opList.fnArray[i];
     const args = opList.argsArray[i] || [];
@@ -2619,9 +2623,14 @@ async function replacePageContents(pdfjsDoc, pageNum, wmRects, srcPdf){
       ty -= fontSize * 1.15;
     } else if(fn === 44 || fn === 45 || fn === 46 || fn === 47){
       // Tj/TJ/'/"：检查文字位置是否在水印矩形内
-      if(isTextInWatermark(tx, ty, fontSize, wmRects)){
+      const hit = isTextInWatermark(tx, ty, fontSize, wmRects);
+      if(pageNum === 1 && dbgTextCount < 8){
+        console.log('text op', dbgTextCount, 'fn=', fn, 'args[0]=', JSON.stringify(String(args[0]).slice(0,30)), 'pos=(', tx.toFixed(2), ',', ty.toFixed(2), ') fontSize=', fontSize, 'hit=', hit);
+        dbgTextCount++;
+      }
+      if(hit){
         removed++;
-        continue;   // 跳过这个 op
+        continue;
       }
     }
     const op = opListItemToOperator(fn, args, ctx);
