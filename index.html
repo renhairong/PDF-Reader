@@ -2584,16 +2584,18 @@ async function decodePageStreams(pg){
 async function stripWatermarkOnPage(pg, wmStrings, pageNum){
   const streams = await decodePageStreams(pg);
   if(!streams.length) return 0;
-  // 调试：打印水印 hex 样本 + 内容流中是否有 hex 字符串字面量
+  // 调试：分析内容流字符串格式（literal / hex / UTF-8 / UTF-16）
   if(pageNum === 1){
-    const sample = wmStrings.slice(0, 3).map(s => textToUTF16BEHex(s).slice(0, 40)).join(', ');
-    console.log('wm page 1 wmStrings hex samples:', sample);
     const merged = streams.map(s => s.decoded).join(' ');
     const hexStrings = merged.match(/<[0-9A-Fa-f]+>/g) || [];
-    console.log('wm page 1 total <hex strings>:', hexStrings.length, 'first 3:', hexStrings.slice(0, 3));
-    // 检查是否有 hex 字符串包含 'FEFF'（UTF-16BE BOM）
-    const bomCount = hexStrings.filter(h => h.includes('FEFF')).length;
-    console.log('wm page 1 hex with BOM (UTF-16BE):', bomCount);
+    const literalStrings = merged.match(/\([^\()]*\)/g) || [];   // 简单 literal（不含转义）
+    console.log('wm page 1 stats: hex=' + hexStrings.length + ', literal_simple=' + literalStrings.length + ', contentLen=' + merged.length);
+    console.log('wm page 1 first 500 chars of content:', merged.slice(0, 500));
+    // 找内容流里第一处出现的"添加微信"附近字节
+    const idx = merged.indexOf('添加');
+    if(idx >= 0){
+      console.log('wm page 1 context around "添加":', JSON.stringify(merged.slice(Math.max(0, idx - 30), idx + 50)));
+    }
   }
   let totalRemoved = 0;
   for(const s of streams){
