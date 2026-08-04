@@ -853,9 +853,9 @@
         </div>
       </div>
       <div class="wm-opts">
-        <label class="wm-check">
-          <input type="checkbox" id="previewWm" checked>
-          预览水印效果
+        <label class="wm-check" title="勾选后预览水印删除后的效果（实际删除需点击删除水印按钮）">
+          <input type="checkbox" id="previewWm">
+          预览效果
         </label>
         <div class="wm-pager">
           <button class="pg-btn" id="wmPgFirst" title="首页">|◀</button>
@@ -2158,7 +2158,7 @@ wmBtn.addEventListener('click', () => {
   wmPgInput.value = 1;
   wmPgTotal.textContent = '/ ' + pdfDoc.numPages;
   wmRecognized = false;
-  wmPreview.checked = true;
+  wmPreview.checked = false;   // 默认不勾选：显示水印 + 识别框
   wmDelBtn.disabled = true;
   wmDelBtn.classList.remove('loading');
   wmDelLabel.textContent = '删除水印';
@@ -2390,8 +2390,8 @@ async function renderWmPreview(){
       box.style.height = (r.h * wmCanvas.height) + 'px';
       wmBoxes.appendChild(box);
     }
-    // 预览水印效果：默认显示识别框；取消勾选 → 模拟删除（水印文字区域涂抹为背景采样色，接近真实删除效果）
-    if(!wmPreview.checked){
+    // 预览效果：默认不勾选 → 显示水印 + 识别框；勾选 → 隐藏水印（背景采样色涂抹，预览删除后效果）
+    if(wmPreview.checked){
       wmBoxes.style.display = 'none';
       const imgData = ctx2d.getImageData(0, 0, wmCanvas.width, wmCanvas.height);
       const px = imgData.data;
