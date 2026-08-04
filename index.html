@@ -2576,11 +2576,18 @@ function tokenizeContent(str){
     if(tokens.length > 100000) return null;
     let s = '';
     // 跳过 BI...EI（inline image 二进制块，tokenize 会因累积二进制导致超长）
-    if(str.slice(i, i+2) === 'BI' && (str[i+2] === '\n' || str[i+2] === ' ' || str[i+2] === '\r')){
-      const eiIdx = str.indexOf('\nEI', i);
-      if(eiIdx < 0 || eiIdx > i + 100000) return null;   // 找不到 EI 或太大 → 解析失败
-      i = eiIdx + 3;
-      continue;
+    // BI 后可以是 \n / 空格 / << 直接开始 dict（PDF 规范允许）
+    if(str.slice(i, i+2) === 'BI' && (str[i+2] === '\n' || str[i+2] === ' ' || str[i+2] === '\r' || str[i+2] === '<')){
+      // 找最近的 EI 标记（不要求前面 \n），验证后面是分隔符避免误匹配字符串内的 EI
+      const eiIdx = str.indexOf('EI', i + 2);
+      if(eiIdx < 0 || eiIdx > i + 500000) return null;
+      const after = str[eiIdx + 2];
+      if(!after || /[\s\n\r()\[\]<>/%]/.test(after)){
+        i = eiIdx + 2;
+        continue;
+      }
+      // EI 后不是分隔符 → 不是 op，跳过这个 BI，继续往下
+      // （BI 累积成普通 op）
     }
     while(i < n && !/[\s()<>\[\]{}/%]/.test(str[i])){
       s += str[i]; i++;
