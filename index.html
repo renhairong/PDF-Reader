@@ -2536,39 +2536,46 @@ function textToUTF16BEHex(s){
 // 这样所有引用该 XObject 的页面（包括 BDC/EMC 标记块和正文位置）都显示空白，无水印
 // 不动页面引用 / 状态 / 字体引用 → 不会破坏排版
 function blankXObjectWatermarks(srcPdf){
-  // 找页眉装饰/水印 XObject 候选（每页 Resources.XObject 里的 Form）
-  const xobjRefs = new Set();   // 已清空的 XObject ref
+  const xobjRefs = new Set();
   let blanked = 0;
+  const dbg = [];
   for(const pg of srcPdf.getPages()){
     const xobjDict = pg.node.Resources();
     if(!xobjDict || typeof xobjDict.get !== 'function') continue;
     const xobjEntry = xobjDict.get(srcPdf.context.obj('XObject'));
-    if(!xobjEntry || typeof xobjEntry.entries !== 'function') continue;
-    for(const [name, ref] of xobjEntry.entries()){
+    if(!xobjEntry){ dbg.push('page '+pg.ref+' no XObject entry'); continue; }
+    if(typeof xobjEntry.entries !== 'function'){
+      dbg.push('page '+pg.ref+' xobjEntry type='+xobjEntry.constructor.name+' (not dict)');
+      continue;
+    }
+    const entries = xobjEntry.entries();
+    dbg.push('page '+pg.ref+' xobjEntries count='+entries.length);
+    for(const [name, ref] of entries){
       if(xobjRefs.has(ref)) continue;
       xobjRefs.add(ref);
       try{
         const stream = srcPdf.context.lookup(ref);
-        if(!stream || typeof stream.dict === 'undefined') continue;
+        if(!stream){ dbg.push('  '+name+' -> no stream'); continue; }
         const dict = stream.dict;
-        // 检查是否是 Form XObject（可能是 watermark/pagination）
+        if(!dict){ dbg.push('  '+name+' -> no dict'); continue; }
         const subtype = dict.get(srcPdf.context.obj('Subtype'));
         const subtypeStr = subtype ? String(subtype) : '';
-        const typeStr = String(dict.get(srcPdf.context.obj('Type')) || '');
-        // Form 类型 + 可疑标识（Subtype=Pagination 或名字含 WM/Watermark）
-        const nameStr = String(name || '');
-        const isForm = subtypeStr === '/Form';
-        const isPagination = typeStr.includes('Pagination');
-        const isWMSuspect = /^[A-Z]+\d+$/.test(nameStr.replace(/^\//, '')) && (nameStr.includes('X') || nameStr.includes('WM'));
-        if(!isForm) continue;
-        // 简化判断：Form + 名字含 X 或 Watermark 特征
-        if(!isPagination && !isWMSuspect) continue;
-        // 清空内容流（最小有效内容流：q Q 保持 graphics state 平衡）
-        stream.contents = Buffer.from('q Q');
-        blanked++;
-      }catch(e){}
+        // 直接判断：Subtype=Form 就清空（简单可靠，水印 XObject 99% 是 Form）
+        if(subtypeStr === '/Form' || subtypeStr === 'Form'){
+          stream.contents = Buffer.from('q Q');
+          blanked++;
+          dbg.push('  '+name+' -> blanked (subtype='+subtypeStr+')');
+        } else {
+          dbg.push('  '+name+' -> skip (subtype='+subtypeStr+')');
+        }
+      }catch(e){
+        dbg.push('  '+name+' err: '+e.message);
+      }
     }
+    // 只看第一页详细
+    if(dbg.length > 30) break;
   }
+  console.log('blankXObjectWatermarks dbg:', dbg.slice(0, 30).join(' | '));
   return blanked;
 }
 
