@@ -1705,86 +1705,86 @@ async function loadFile(file, options = {}){
   showLoading();
   try{
     const sourceData = await file.arrayBuffer();
-    // pdf.js 会把传入的 ArrayBuffer 转移给 Worker，原 buffer 会变成 0 字节。
-    // 必须在 getDocument 前复制两份：一份用于打印/历史，一份交给 pdf.js。
     const historyData = sourceData.slice(0);
-    const pdfData = sourceData.slice(0);
     pdfRawData = historyData;
-    if(pdfDoc){ pdfViewer.setDocument(null); findController.setDocument(null); linkService.setDocument(null); pdfDoc = null; }
-    pdfDoc = await pdfjsLib.getDocument({
-      data: pdfData,
-      // 启用 CJK 字符映射 + 标准字体数据 + 系统字体回退，解决中文/部分字符无法显示的问题
-      cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/cmaps/',
-      cMapPacked: true,
-      standardFontDataUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/standard_fonts/',
-      useSystemFonts: true,
-    }).promise;
-    pdfViewer.setDocument(pdfDoc);
-    pdfViewer.scrollMode = ScrollMode.VERTICAL;
-    linkService.setDocument(pdfDoc);
-    findController.setDocument(pdfDoc);
-    jumpInput.max = pdfDoc.numPages;
-    jumpInput.placeholder = '页';
-    // 关键：等 pagesloaded 再设置 scale/spread，否则 _pages 为空时 update() 触发解构 undefined 的 pageView 报错
-    await new Promise(resolve => {
-      const h = () => resolve();
-      pdfViewer.eventBus.on('pagesloaded', h);
-      // 兜底超时 5s（极少数 PDF 没有 outline/pages 事件）
-      setTimeout(()=>{ pdfViewer.eventBus.off('pagesloaded', h); resolve(); }, 5000);
-    });
-    // 恢复上次缩放比例（按文件名匹配；无记录则默认 100%）
-    const progScale = checkProgress(file.name || '');
-    pdfViewer.currentScaleValue = (progScale && progScale.scale > 0) ? progScale.scale : 1;
-    applySpread();
-    hideEmpty();
-    hideLoading();
-    updateZoomLabel();
-    updatePageInfo();
-    // V1.1
-    lastFileName = file.name || '';
-    // 确定 fileId：历史记录复用旧 ID，新文件检查最近列表是否同名，避免 ID 不一致导致批注丢失
-    if(options.historyId){
-      lastFileId = options.historyId;
-    } else {
-      const existingEntry = getRecentList().find(i => i.name === (file.name || '未命名.pdf'));
-      lastFileId = existingEntry ? existingEntry.id : (Date.now().toString(36) + Math.random().toString(36).slice(2,6));
-    }
-    // 预加载批注缓存（避免打开文件时异步读 IDB 导致闪烁）
-    loadAnnotationsCache(lastFileId).then(() => setTimeout(renderAllAnnotations, 0));
-    // 反推 PDF 内置批注（下载后的修改版可继续编辑；按位置去重不重复写入）
-    importAnnotationsFromPdf();
-    document.title = file.name || '云轩 PDF 阅读器 · 网页版';
-    loadOutline();
-    // 保存到最近打开记录（历史记录重开时只更新时间，不重复写文件数据）
-    if(options.historyId){
-      const list = getRecentList();
-      const idx = list.findIndex(i => i.id === options.historyId);
-      if(idx >= 0){
-        const record = list.splice(idx, 1)[0];
-        record.time = Date.now();
-        list.unshift(record);
-        saveRecentList(list);
-        renderRecentFiles(list);
-      }
-    } else {
-      saveRecentFile(file.name || '未命名.pdf', historyData);
-    }
-    const prog = checkProgress(lastFileName);
-    if(prog && prog.page > 1){
-      if(getAutoJump()){
-        // 自动跳转：先设页码减少闪烁，等渲染完成再跳转确保生效
-        pdfViewer.currentPageNumber = prog.page;
-        requestAnimationFrame(() => pdfViewer.scrollPageIntoView({ pageNumber: prog.page }));
-      } else {
-        progPage.textContent = prog.page;
-        progBanner.classList.add('show');
-      }
-    }
-    if(tocPanel.classList.contains('show')) loadOutline();
+    await initPdf(historyData, file.name || '', options);
   }catch(err){
     hideLoading();
     showError('文件无法打开：' + (err && err.message ? err.message : err));
   }
+}
+
+// 核心 PDF 加载逻辑：纯字节 → pdf.js viewer（供 loadFile 和水印处理后刷新复用）
+async function initPdf(bytes, name, options = {}){
+  const pdfData = bytes.slice(0);
+  if(pdfDoc){ pdfViewer.setDocument(null); findController.setDocument(null); linkService.setDocument(null); pdfDoc = null; }
+  pdfDoc = await pdfjsLib.getDocument({
+    data: pdfData,
+    // 启用 CJK 字符映射 + 标准字体数据 + 系统字体回退，解决中文/部分字符无法显示的问题
+    cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/cmaps/',
+    cMapPacked: true,
+    standardFontDataUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/standard_fonts/',
+    useSystemFonts: true,
+  }).promise;
+  pdfViewer.setDocument(pdfDoc);
+  pdfViewer.scrollMode = ScrollMode.VERTICAL;
+  linkService.setDocument(pdfDoc);
+  findController.setDocument(pdfDoc);
+  jumpInput.max = pdfDoc.numPages;
+  jumpInput.placeholder = '页';
+  // 关键：等 pagesloaded 再设置 scale/spread
+  await new Promise(resolve => {
+    const h = () => resolve();
+    pdfViewer.eventBus.on('pagesloaded', h);
+    setTimeout(()=>{ pdfViewer.eventBus.off('pagesloaded', h); resolve(); }, 5000);
+  });
+  // 恢复上次缩放比例
+  const progScale = checkProgress(name);
+  pdfViewer.currentScaleValue = (progScale && progScale.scale > 0) ? progScale.scale : 1;
+  applySpread();
+  hideEmpty();
+  hideLoading();
+  updateZoomLabel();
+  updatePageInfo();
+  lastFileName = name;
+  // 确定 fileId
+  if(options.historyId){
+    lastFileId = options.historyId;
+  } else {
+    const existingEntry = getRecentList().find(i => i.name === (name || '未命名.pdf'));
+    lastFileId = existingEntry ? existingEntry.id : (Date.now().toString(36) + Math.random().toString(36).slice(2,6));
+  }
+  // 预加载批注缓存
+  loadAnnotationsCache(lastFileId).then(() => setTimeout(renderAllAnnotations, 0));
+  // 反推 PDF 内置批注
+  importAnnotationsFromPdf();
+  document.title = name || '云轩 PDF 阅读器 · 网页版';
+  loadOutline();
+  // 保存到最近打开
+  if(options.historyId){
+    const list = getRecentList();
+    const idx = list.findIndex(i => i.id === options.historyId);
+    if(idx >= 0){
+      const record = list.splice(idx, 1)[0];
+      record.time = Date.now();
+      list.unshift(record);
+      saveRecentList(list);
+      renderRecentFiles(list);
+    }
+  } else if(!options.skipSaveRecent){
+    saveRecentFile(name || '未命名.pdf', bytes);
+  }
+  const prog = checkProgress(lastFileName);
+  if(prog && prog.page > 1 && !options.skipProgress){
+    if(getAutoJump()){
+      pdfViewer.currentPageNumber = prog.page;
+      requestAnimationFrame(() => pdfViewer.scrollPageIntoView({ pageNumber: prog.page }));
+    } else {
+      progPage.textContent = prog.page;
+      progBanner.classList.add('show');
+    }
+  }
+  if(tocPanel.classList.contains('show')) loadOutline();
 }
 
 // ---------- events ----------
@@ -2740,6 +2740,10 @@ wmDelBtn.addEventListener('click', async () => {
     // 替换内存中的源字节（不修改磁盘原文件）
     pdfRawData = pdfBytes.slice(0);
     wmProcessed = true;
+    // 关键：刷新 pdf.js viewer（canvas 是不可变的，必须重新加载才能看到新数据）
+    showLoading();
+    await initPdf(pdfRawData, lastFileName, { skipSaveRecent: true, skipProgress: true });
+    hideLoading();
     wmResult.classList.add('ok');
     wmResultText.textContent = `✅ 已处理 ${wmWatermarks.count} 处水印，请关闭弹框查看效果，或点导航栏"下载"保存无水印版`;
     wmDelLabel.textContent = '批量处理水印';
