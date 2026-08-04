@@ -2543,39 +2543,37 @@ function blankXObjectWatermarks(srcPdf){
     const xobjDict = pg.node.Resources();
     if(!xobjDict || typeof xobjDict.get !== 'function') continue;
     const xobjEntry = xobjDict.get(srcPdf.context.obj('XObject'));
-    if(!xobjEntry){ dbg.push('page '+pg.ref+' no XObject entry'); continue; }
-    if(typeof xobjEntry.entries !== 'function'){
-      dbg.push('page '+pg.ref+' xobjEntry type='+xobjEntry.constructor.name+' (not dict)');
-      continue;
-    }
+    if(!xobjEntry) continue;
+    if(typeof xobjEntry.entries !== 'function') continue;
     const entries = xobjEntry.entries();
-    dbg.push('page '+pg.ref+' xobjEntries count='+entries.length);
     for(const [name, ref] of entries){
       if(xobjRefs.has(ref)) continue;
       xobjRefs.add(ref);
       try{
         const stream = srcPdf.context.lookup(ref);
-        if(!stream){ dbg.push('  '+name+' -> no stream'); continue; }
+        if(!stream) continue;
         const dict = stream.dict;
-        if(!dict){ dbg.push('  '+name+' -> no dict'); continue; }
+        if(!dict) continue;
         const subtype = dict.get(srcPdf.context.obj('Subtype'));
         const subtypeStr = subtype ? String(subtype) : '';
-        // 直接判断：Subtype=Form 就清空（简单可靠，水印 XObject 99% 是 Form）
-        if(subtypeStr === '/Form' || subtypeStr === 'Form'){
-          stream.contents = Buffer.from('q Q');
-          blanked++;
-          dbg.push('  '+name+' -> blanked (subtype='+subtypeStr+')');
-        } else {
-          dbg.push('  '+name+' -> skip (subtype='+subtypeStr+')');
-        }
+        // 只清空 Form XObject（图片 XObject 的 Subtype 是 /Image，跳过）
+        if(subtypeStr !== '/Form' && subtypeStr !== 'Form') continue;
+        // 进一步：必须是水印相关 XObject（按名字特征：水印通常命名为 /FX*, /WM*, /Watermark*）
+        // 但为了稳健：只清空名字匹配 FX* 或 WM* 的 Form（不动装饰性 Form XObject）
+        const nameStr = String(name || '').replace(/^\//, '');
+        const isWatermarkXObj = /^(FX|WM|Watermark)/i.test(nameStr);
+        if(!isWatermarkXObj) continue;
+        // 关键：用 Uint8Array 替换内容（浏览器没 Buffer！）
+        // 内容 "q Q" 的 ASCII 字节：q=0x71, 空格=0x20, Q=0x51
+        stream.contents = new Uint8Array([0x71, 0x20, 0x51]);
+        blanked++;
+        dbg.push('  blanked '+nameStr+' (Form)');
       }catch(e){
-        dbg.push('  '+name+' err: '+e.message);
+        dbg.push('  err: '+e.message);
       }
     }
-    // 只看第一页详细
-    if(dbg.length > 30) break;
   }
-  console.log('blankXObjectWatermarks dbg:', dbg.slice(0, 30).join(' | '));
+  console.log('blankXObjectWatermarks:', dbg.slice(0, 10).join(' | '));
   return blanked;
 }
 
