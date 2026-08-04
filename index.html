@@ -2621,14 +2621,13 @@ async function stripWatermarkOnPage(pg, wmStrings, pageNum){
     totalRemoved += r2.removed;
     s.str = newStr;
     s.removed = r1.removed + r2.removed;
-    // 调试：所有页前 200 字符 + 包含 Watermark 的页面
-    if(r1.removed > 0 || pageNum <= 2){
-      const hasWM = /\bWatermark\b/.test(s.decoded);
-      if(hasWM || pageNum <= 2){
-        console.log('wm page', pageNum, 'r1=', r1.removed, 'r2=', r2.removed, 'hasWatermark=', hasWM, 'len=', newStr.length);
-        console.log('  before:', s.decoded.slice(0, 300));
-        console.log('  after :', newStr.slice(0, 300));
-      }
+    // 调试：打印 page 2 和 page 4 完整 BEFORE/AFTER（找误删的正文）
+    if(pageNum === 2 || pageNum === 4){
+      console.log('==== wm page', pageNum, 'full BEFORE (', s.decoded.length, 'chars) ====');
+      console.log(s.decoded);
+      console.log('==== wm page', pageNum, 'full AFTER (', newStr.length, 'chars) ====');
+      console.log(newStr);
+      console.log('==== end page', pageNum, '====');
     }
   }
   if(totalRemoved === 0) return 0;
