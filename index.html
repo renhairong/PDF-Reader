@@ -2563,9 +2563,10 @@ function blankXObjectWatermarks(srcPdf){
         const nameStr = String(name || '').replace(/^\//, '');
         const isWatermarkXObj = /^(FX|WM|Watermark)/i.test(nameStr);
         if(!isWatermarkXObj) continue;
-        // 关键：用 Uint8Array 替换内容（浏览器没 Buffer！）
-        // 内容 "q Q" 的 ASCII 字节：q=0x71, 空格=0x20, Q=0x51
-        stream.contents = new Uint8Array([0x71, 0x20, 0x51]);
+        // 关键：内容流需要 zlib 压缩（pdf-lib 内部用 pako 压缩 "q Q"，附 FlateDecode filter）
+        const newStream = ctx.flateStream('q Q');
+        stream.contents = newStream.contents;  // 压缩后的字节
+        stream.dict = newStream.dict;          // 完整的 dict（含 Filter: FlateDecode + Length）
         blanked++;
         dbg.push('  blanked '+nameStr+' (Form)');
       }catch(e){
