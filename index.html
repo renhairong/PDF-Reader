@@ -2491,40 +2491,14 @@ async function buildWatermarkStrippedPdf(){
       }
       for(let j = toRemove.length - 1; j >= 0; j--) annots.remove(toRemove[j]);
     }
-    // 2. 内容流文字水印：用 pdf.js operatorList 重建（避免 BI/ID/EI/inline image 难题）
-    //    复用主 view 的 pdfDoc（已加载好的），不需要重新加载
-    const pdfjsDoc = pdfDoc;   // 主 view 的 pdf.js 文档（worker 已解析所有页面）
-    if(!pdfjsDoc){
-      throw new Error('pdf.js doc not available');
-    }
-    let totalRemoved = 0;
-    for(const pgStr in wmWatermarks.byPage){
-      const pageNum = parseInt(pgStr);
-      if(pageNum < 1 || pageNum > pages.length) continue;
-      const rects = wmWatermarks.byPage[pgStr].filter(r => r.src !== 'annotation');
-      if(!rects.length) continue;
-      const { width, height } = pages[pageNum - 1].getSize();
-      // 归一化（左上原点）→ PDF 点坐标（左下原点）
-      const wmRects = rects.map(r => ({
-        x: r.x * width,
-        y: (1 - r.y - r.h) * height,
-        w: r.w * width,
-        h: r.h * height
-      }));
-      try{
-        const wmStrings = (wmWatermarks.byPage[pgStr] || []).filter(r => r.text).map(r => r.text);
-        const removed = await replacePageContents(pdfjsDoc, pageNum, wmRects, srcPdf, wmStrings);
-        totalRemoved += removed;
-      }catch(e){
-        console.warn('wm: page', pgStr, 'strip failed:', e.message, '\n', e.stack);
-      }
-    }
+    // 2. 内容流文字水印：字符串级删除（保留 xref/字体/ExtGState 引用，避免空白页面）
+    const totalRemoved = await stripWatermarks(srcPdf);
     if(totalRemoved === 0){
-      console.log('wm: no Tj/TJ op matched watermark rects, returning original');
+      console.log('wm: no watermark string matched, returning original');
       return originalBytes;
     }
     const newBytes = await srcPdf.save();
-    console.log('wm save OK, removed', totalRemoved, 'ops, size:', newBytes.byteLength, '(orig:', originalBytes.byteLength, ')');
+    console.log('wm save OK, removed', totalRemoved, 'strings, size:', newBytes.byteLength, '(orig:', originalBytes.byteLength, ')');
     return newBytes;
   }catch(e){
     console.warn('wm strip failed:', e.message);
@@ -2533,154 +2507,127 @@ async function buildWatermarkStrippedPdf(){
 }
 
 
-// 基于 pdf.js operatorList 重建内容流：完全避开手写 tokenizer / BI/ID/EI / inline image 难题
-// pdf.js worker 已经把内容流解析成 opList（fnArray + argsArray），我们直接用它识别水印 op 并重建 PDFOperator 数组
+// 字符串级水印删除：直接修改原 PDF 内容流字节，保留 xref/字体/ExtGState 引用
+// （不用 opList 重建：pdf-lib save() 重新生成 xref，原 PDFRef 全部失效 → 空白页面）
+// 策略：解压内容流 → 删除水印字符串字面量（hex） → 压缩写回
 
-// pdf.js OPS 数字 → PDF 操作符名字
-// 只映射 PDF 标准操作符；pdf.js 自定义的（dependency、beginGroup、paintImageXObject 等）跳过
-// —— 它们是 pdf.js 渲染引擎内部用的，不是 PDF 标准，写回 PDF 会破坏文件
-const OPS_TO_PDF_NAME = {
-  2:'w', 3:'J', 4:'j', 5:'M', 6:'d', 7:'ri', 8:'i', 9:'gs',            // graphics state
-  10:'q', 11:'Q', 12:'cm',                                            // stack + transform
-  13:'m', 14:'l', 15:'c', 16:'v', 17:'y', 18:'h', 19:'re',             // path
-  20:'S', 21:'s', 22:'f', 23:'f*', 24:'B', 25:'B*', 26:'b', 27:'b*', 28:'n',  // path paint
-  29:'W', 30:'W*',                                                    // clip
-  31:'BT', 32:'ET',                                                    // text
-  33:'Tc', 34:'Tw', 35:'Tz', 36:'TL', 37:'Tf', 38:'Tr', 39:'Ts',        // text state
-  40:'Td', 41:'TD', 42:'Tm', 43:'T*', 44:'Tj', 45:'TJ', 46:"'", 47:'"',  // text pos + show
-  50:'CS', 51:'cs', 52:'SC', 53:'SCN', 54:'sc', 55:'scn',                // color space
-  56:'G', 57:'g', 58:'RG', 59:'rg', 60:'K', 61:'k',                      // color set
-  62:'sh', 66:'Do',                                                    // shading + xobject
-  69:'BMC', 70:'BDC', 71:'EMC', 72:'BX', 73:'EX'                        // marked content + compat
-  // 跳过：1(dependency)、63-65(BI/ID/EI inline image)、67-68(MP/DP)、74-93(pdf.js 内部)
-};
-
-// 转单个 arg 为 PDFObject（保留 PDFRef、数组；字符串 → PDFHexString）
-function convertArg(arg, ctx){
-  if(typeof arg === 'number') return pdfLibModule.PDFNumber.of(arg);
-  if(typeof arg === 'string'){
-    try{ return pdfLibModule.PDFHexString.fromText(arg); }
-    catch(e){ return pdfLibModule.PDFString.of(arg); }
+// 中文 → UTF-16BE + BOM 的 hex（PDF 标准中文编码）
+function textToUTF16BEHex(s){
+  let hex = 'FEFF';
+  for(let i = 0; i < s.length; i++){
+    const code = s.charCodeAt(i);
+    hex += ((code >> 8) & 0xFF).toString(16).padStart(2, '0').toUpperCase();
+    hex += (code & 0xFF).toString(16).padStart(2, '0').toUpperCase();
   }
-  // PDFRef 对象（pdf.js 用 objectNumber 标识）→ 直接传给 PDFOperator 引用
-  if(arg && typeof arg === 'object' && typeof arg.objectNumber === 'number'){
-    return arg;   // 直接返回 PDFRef
-  }
-  // glyph 对象（pdf.js TJ/Tj 的 unicode 字段）→ 转 hex string
-  if(arg && typeof arg === 'object' && typeof arg.unicode === 'string'){
-    try{ return pdfLibModule.PDFHexString.fromText(arg.unicode); }
-    catch(e){ return pdfLibModule.PDFString.of(arg.unicode); }
-  }
-  // 数组（TJ 数组里混着的 kerning 数字 或 glyph 对象）→ 关键：用 PDFArray 包装！
-  // （pdf-lib 内部序列化为内容流时调用 arg.charCodeAt，纯 JS 数组没有此方法）
-  if(Array.isArray(arg)){
-    const items = arg.map(a => convertArg(a, ctx));   // 递归
-    return ctx.obj(items);   // ctx.obj([]) 自动返回 PDFArray 实例
-  }
-  // 其他对象 → 转字符串兜底（极少数情况，不影响显示）
-  try{ return pdfLibModule.PDFString.of(String(arg)); }
-  catch(e){ return pdfLibModule.PDFString.of(''); }
+  return hex;
 }
 
-// 把 pdf.js opList 的一项（fn + args）转成 PDFOperator
-function opListItemToOperator(fn, args, ctx){
-  const name = OPS_TO_PDF_NAME[fn];
-  if(!name) return null;
-  const arr = Array.isArray(args) ? args : [];
-  const pdfArgs = arr.map(a => {
-    try{ return convertArg(a, ctx); }
-    catch(e){
-      return pdfLibModule.PDFString.of('');
-    }
-  });
-  try{ return pdfLibModule.PDFOperator.of(name, pdfArgs); }
-  catch(e){
-    console.warn('wm: skip op', name, '(', e.message, ')');
-    return null;
-  }
-}
-
-// 文字位置是否在水印矩形内
-// 水印判定（绕开坐标系问题：先文字内容匹配，bbox 兜底）
-// 1) 文字内容匹配：把 Tj/TJ/'/" 参数里的 unicode 全部收集，判断是否包含水印文字（精确/包含/拼接）
-// 2) bbox 检测：坐标系正确时兜底
-function isWatermarkOp(fn, args, tx, ty, fontSize, wmRects, wmStrings){
-  if(wmStrings && Array.isArray(wmStrings) && wmStrings.length){
-    // 收集此 op 内所有 unicode 字符
-    const unicodes = [];
-    const collect = (a) => {
-      if(typeof a === 'string') unicodes.push(a);
-      else if(a && typeof a === 'object' && typeof a.unicode === 'string') unicodes.push(a.unicode);
-    };
-    if(fn === 44 || fn === 46 || fn === 47){  // Tj / ' / "
-      collect(args[0]);
-    } else if(fn === 45){  // TJ：数组（glyph 对象或 kerning 数字）
-      const a = args[0];
-      const arr = Array.isArray(a) ? a : (a && Array.isArray(a.items) ? a.items : []);
-      for(const item of arr) collect(item);
-    }
-    const joined = unicodes.join('');
-    for(const w of wmStrings){
-      if(!w) continue;
-      // 精确匹配 / 包含匹配（处理分片：TJ 数组里只包含水印的一部分字符）
-      if(joined === w || joined.includes(w) || w.includes(joined)) return true;
-    }
-  }
-  // 2. bbox 检测兜底
-  const charX0 = tx, charX1 = tx + fontSize * 1.2;
-  const charY0 = ty, charY1 = ty + fontSize * 1.2;
-  for(const r of wmRects){
-    if(charX1 >= r.x && charX0 <= r.x + r.w &&
-       charY1 >= r.y && charY0 <= r.y + r.h) return true;
-  }
-  return false;
-}
-
-// 基于 pdf.js opList 重建单页内容流（删除水印 op）
-async function replacePageContents(pdfjsDoc, pageNum, wmRects, srcPdf, wmStrings){
-  // pdfjsDoc: pdf.js PDFDocumentProxy（用 .getPage()，1-based）
-  // srcPdf: pdf-lib PDFDocument（用 .getPages() 数组，0-based）
-  // wmStrings: 该页水印文字集合（用于内容匹配）
-  const ctx = srcPdf.context;
-  const page = srcPdf.getPage(pageNum - 1);
-  const pdfjsPage = await pdfjsDoc.getPage(pageNum);
-  const opList = await pdfjsPage.getOperatorList();
-  // 防御：某些 PDF opList 可能异常（fnArray 缺失）—— 跳过该页
-  if(!opList || !opList.fnArray || !opList.argsArray){
-    console.warn('wm: page', pageNum, 'opList invalid, skipping');
-    return 0;
-  }
-  let tx = 0, ty = 0, fontSize = 12;
+// 从内容流字符串里删除水印字符串字面量
+function stripWatermarkFromContent(contentStr, wmStrings){
+  if(!wmStrings || !wmStrings.length) return {str: contentStr, removed: 0};
   let removed = 0;
-  const pdfOps = [];
-  for(let i = 0; i < opList.fnArray.length; i++){
-    const fn = opList.fnArray[i];
-    const args = opList.argsArray[i] || [];
-    // 跟踪文字位置
-    if(fn === 37){ // setFont /Tf → args = [name, size]
-      if(typeof args[1] === 'number') fontSize = args[1];
-    } else if(fn === 42){ // setTextMatrix /Tm → args = [a,b,c,d,e,f]
-      if(args.length >= 6){ tx = args[4]; ty = args[5]; }
-    } else if(fn === 40 || fn === 41){ // moveText /Td /TD → args = [x,y]
-      if(args.length >= 2){ tx += args[0]; ty += args[1]; }
-    } else if(fn === 43){ // nextLine T*
-      ty -= fontSize * 1.15;
-    } else if(fn === 44 || fn === 45 || fn === 46 || fn === 47){
-      // Tj/TJ/'/": 文字内容匹配 + bbox 兜底
-      if(isWatermarkOp(fn, args, tx, ty, fontSize, wmRects, wmStrings)){
-        removed++;
-        continue;
-      }
+  for(const wmStr of wmStrings){
+    if(!wmStr) continue;
+    // 1) 整体删除（最常见：水印写成一个完整 hex 字符串字面量）
+    const fullHex = textToUTF16BEHex(wmStr);
+    const reFull = new RegExp('<' + fullHex + '>', 'g');
+    const matches1 = contentStr.match(reFull);
+    if(matches1){ contentStr = contentStr.replace(reFull, ''); removed += matches1.length; }
+
+    // 2) 按字符级别删除（处理 TJ 分片：每个字符一个独立 hex 字符串）
+    for(const ch of wmStr){
+      const chHex = textToUTF16BEHex(ch);
+      const reCh = new RegExp('<' + chHex + '>', 'g');
+      const matches2 = contentStr.match(reCh);
+      if(matches2){ contentStr = contentStr.replace(reCh, ''); removed += matches2.length; }
     }
-    const op = opListItemToOperator(fn, args, ctx);
-    if(op) pdfOps.push(op);
   }
-  if(!removed) return 0;
-  // 用 pdf-lib ctx.contentStream 创建新内容流（自动序列化 PDFOperator 数组 + FlateDecode 压缩）
-  const newStream = ctx.contentStream(pdfOps);
-  const newRef = ctx.register(newStream);
-  page.node.set(ctx.obj('Contents'), newRef);
-  return removed;
+  return {str: contentStr, removed};
+}
+
+// 解压所有内容流（支持多流）
+async function decodePageStreams(pg){
+  const ctx = pg.doc.context;
+  const contents = pg.node.Contents();
+  const result = [];
+  const collect = async (s) => {
+    if(!s || typeof s.getContents !== 'function') return;
+    const raw = s.getContents();
+    let isFlate = false;
+    try{
+      const f = s.dict && s.dict.get(ctx.obj('Filter'));
+      isFlate = f && String(f).includes('FlateDecode');
+    }catch(e){}
+    let decoded = '';
+    if(isFlate){
+      try{
+        const ds = new DecompressionStream('deflate');
+        const buf = await new Response(new Blob([raw]).stream().pipeThrough(ds)).arrayBuffer();
+        decoded = new TextDecoder().decode(buf);
+      }catch(e){}
+    } else {
+      decoded = new TextDecoder().decode(raw);
+    }
+    result.push({raw, decoded, str: decoded, removed: 0});
+  };
+  if(contents && typeof contents.size === 'function'){
+    for(let i = 0; i < contents.size(); i++){
+      try{ await collect(ctx.lookup(contents.get(i))); }catch(e){}
+    }
+  } else {
+    await collect(contents);
+  }
+  return result;
+}
+
+// 单页处理：解压 → 删除水印 → 压缩写回
+async function stripWatermarkOnPage(pg, wmStrings){
+  const streams = await decodePageStreams(pg);
+  if(!streams.length) return 0;
+  let totalRemoved = 0;
+  for(const s of streams){
+    const r = stripWatermarkFromContent(s.decoded, wmStrings);
+    s.str = r.str;
+    s.removed = r.removed;
+    totalRemoved += r.removed;
+  }
+  if(totalRemoved === 0) return 0;
+  const ctx = pg.doc.context;
+  if(streams.length === 1){
+    const newStream = ctx.flateStream(streams[0].str);
+    const newRef = ctx.register(newStream);
+    pg.node.set(ctx.obj('Contents'), newRef);
+  } else {
+    // 多流：合并后写回单流（破坏最少）
+    const merged = streams.map(s => s.str).join(' ');
+    const newStream = ctx.flateStream(merged);
+    const newRef = ctx.register(newStream);
+    pg.node.set(ctx.obj('Contents'), newRef);
+  }
+  return totalRemoved;
+}
+
+// 对所有水印页处理
+async function stripWatermarks(srcPdf){
+  const pages = srcPdf.getPages();
+  let totalRemoved = 0;
+  for(const pgStr in wmWatermarks.byPage){
+    const pageNum = parseInt(pgStr);
+    if(pageNum < 1 || pageNum > pages.length) continue;
+    const wmStringsSet = new Set();
+    for(const r of wmWatermarks.byPage[pgStr]){
+      if(r.text) wmStringsSet.add(r.text);
+    }
+    const wmStrings = Array.from(wmStringsSet);
+    if(!wmStrings.length) continue;
+    try{
+      const removed = await stripWatermarkOnPage(pages[pageNum - 1], wmStrings);
+      totalRemoved += removed;
+    }catch(e){
+      console.warn('wm: page', pgStr, 'strip failed:', e.message);
+    }
+  }
+  return totalRemoved;
 }
 
 // 处理水印：在内存中替换当前 PDF 为去水印版 → 关闭弹框 → 用户直接看到去水印效果
