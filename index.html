@@ -2172,7 +2172,7 @@ wmBtn.addEventListener('click', () => {
   wmPreview.checked = false;   // 默认不勾选：显示水印 + 识别框
   wmDelBtn.disabled = true;
   wmDelBtn.classList.remove('loading');
-  wmDelLabel.textContent = '删除水印';
+  wmDelLabel.textContent = '批量处理水印';
   wmResult.classList.remove('ok', 'err');
   wmResultText.textContent = '识别中…';
   wmLoading.classList.add('show');
@@ -2201,7 +2201,6 @@ function closeWmModal(){
   wmRecognized = false;
   wmDelBtn.disabled = true;
   wmDelBtn.classList.remove('loading');
-  wmDelLabel.textContent = '批量处理水印';
   wmResult.classList.remove('ok', 'err');
   wmResultText.textContent = '识别中…';
 }
@@ -2736,13 +2735,13 @@ wmDelBtn.addEventListener('click', async () => {
     wmProcessed = true;
     wmResult.classList.add('ok');
     wmResultText.textContent = `✅ 已处理 ${wmWatermarks.count} 处水印，请关闭弹框查看效果，或点导航栏"下载"保存无水印版`;
-    wmDelLabel.textContent = '处理水印';
+    wmDelLabel.textContent = '批量处理水印';
     wmDelBtn.classList.remove('loading');
     wmDelBtn.disabled = true;   // 处理后禁用重处理
   }catch(e){
     wmDelBtn.classList.remove('loading');
     wmDelBtn.disabled = false;
-    wmDelLabel.textContent = '处理水印';
+    wmDelLabel.textContent = '批量处理水印';
     wmResult.classList.add('err');
     wmResultText.textContent = '处理失败：' + (e?.message || e);
   }
