@@ -2444,30 +2444,38 @@ wmPgInput.addEventListener('keydown', e => { if(e.key === 'Enter') wmSetPage(par
 
 // ── 删除水印 → 生成修改版 PDF ──
 // 方案 B：真正从内容流删除水印文字（Tj 操作符），背景完整保留（水印打在图片上也能删文字）
+// 失败兜底：处理出错返回原始 PDF 字节（保证用户能下载可用文件）
+// 没识别到水印：直接返回原字节，不经 pdf-lib（避免重新序列化导致 Chrome 严格解析报警告）
 async function buildWatermarkStrippedPdf(){
-  const { PDFDocument } = await loadPdfLibModule();
-  const srcPdf = await PDFDocument.load(pdfRawData.slice(0));
-  const pages = srcPdf.getPages();
-  const ctx = srcPdf.context;
-  // 1. 删除注释层水印
-  for(const pg of pages){
-    const annots = pg.node.Annots();
-    if(!annots) continue;
-    const toRemove = [];
-    for(let j = 0; j < annots.size(); j++){
-      const ref = annots.get(j);
-      let d;
-      try { d = ctx.lookup(ref); if(!d) continue; } catch(e){ continue; }
-      if(typeof d.get !== 'function') continue;
-      const sub = d.get(ctx.obj('Subtype'));
-      if(!/FreeText|Text|Stamp|Square/.test(String(sub||''))) continue;
-      const hay = [String(d.get(ctx.obj('Name'))||''), String(d.get(ctx.obj('T'))||''), String(d.get(ctx.obj('Contents'))||'')].join(' ').toLowerCase();
-      if(/watermark|\bwm\b|水印/.test(hay)) toRemove.push(j);
-    }
-    for(let j = toRemove.length - 1; j >= 0; j--) annots.remove(toRemove[j]);
+  const originalBytes = pdfRawData.slice(0);
+  // 没水印 → 直接返回原文件（最稳，不经 pdf-lib）
+  if(!wmWatermarks || wmWatermarks.count === 0){
+    console.log('wm: no watermark detected, returning original bytes');
+    return originalBytes;
   }
-  // 2. 内容流文字水印：解析操作符 → 删除水印矩形内的 Tj → 重建内容流
-  if(wmWatermarks){
+  try{
+    const { PDFDocument } = await loadPdfLibModule();
+    const srcPdf = await PDFDocument.load(pdfRawData.slice(0));
+    const pages = srcPdf.getPages();
+    const ctx = srcPdf.context;
+    // 1. 删除注释层水印
+    for(const pg of pages){
+      const annots = pg.node.Annots();
+      if(!annots) continue;
+      const toRemove = [];
+      for(let j = 0; j < annots.size(); j++){
+        const ref = annots.get(j);
+        let d;
+        try { d = ctx.lookup(ref); if(!d) continue; } catch(e){ continue; }
+        if(typeof d.get !== 'function') continue;
+        const sub = d.get(ctx.obj('Subtype'));
+        if(!/FreeText|Text|Stamp|Square/.test(String(sub||''))) continue;
+        const hay = [String(d.get(ctx.obj('Name'))||''), String(d.get(ctx.obj('T'))||''), String(d.get(ctx.obj('Contents'))||'')].join(' ').toLowerCase();
+        if(/watermark|\bwm\b|水印/.test(hay)) toRemove.push(j);
+      }
+      for(let j = toRemove.length - 1; j >= 0; j--) annots.remove(toRemove[j]);
+    }
+    // 2. 内容流文字水印：解析操作符 → 删除水印矩形内的 Tj → 重建内容流
     for(const pgStr in wmWatermarks.byPage){
       const pi = parseInt(pgStr) - 1;
       if(pi < 0 || pi >= pages.length) continue;
@@ -2488,8 +2496,13 @@ async function buildWatermarkStrippedPdf(){
         console.warn('wm content strip failed on page', pgStr, e);
       }
     }
+    const newBytes = await srcPdf.save();
+    console.log('wm save OK, size:', newBytes.byteLength, '(orig:', originalBytes.byteLength, ')');
+    return newBytes;
+  }catch(e){
+    console.warn('wm strip failed, fallback to original:', e);
+    return originalBytes;
   }
-  return await srcPdf.save();
 }
 
 // 解析 PDF 内容流为 token 列表
