@@ -2537,43 +2537,47 @@ async function buildWatermarkStrippedPdf(){
 // pdf.js worker 已经把内容流解析成 opList（fnArray + argsArray），我们直接用它识别水印 op 并重建 PDFOperator 数组
 
 // pdf.js OPS 数字 → PDF 操作符名字
+// 只映射 PDF 标准操作符；pdf.js 自定义的（dependency、beginGroup、paintImageXObject 等）跳过
+// —— 它们是 pdf.js 渲染引擎内部用的，不是 PDF 标准，写回 PDF 会破坏文件
 const OPS_TO_PDF_NAME = {
-  1:'dependency', 2:'w', 3:'J', 4:'j', 5:'M', 6:'d', 7:'ri', 8:'i', 9:'gs',
-  10:'q', 11:'Q', 12:'cm', 13:'m', 14:'l', 15:'c', 16:'v', 17:'y', 18:'h', 19:'re',
-  20:'S', 21:'s', 22:'f', 23:'f*', 24:'B', 25:'B*', 26:'b', 27:'b*', 28:'n',
-  29:'W', 30:'W*', 31:'BT', 32:'ET', 33:'Tc', 34:'Tw', 35:'Tz', 36:'TL', 37:'Tf',
-  38:'Tr', 39:'Ts', 40:'Td', 41:'TD', 42:'Tm', 43:'T*', 44:'Tj', 45:'TJ',
-  46:"'", 47:'"', 48:'d0', 49:'d1',
-  50:'CS', 51:'cs', 52:'SC', 53:'SCN', 54:'sc', 55:'scn', 56:'G', 57:'g', 58:'RG', 59:'rg', 60:'K', 61:'k',
-  62:'sh', 63:'BI', 64:'ID', 65:'EI', 66:'Do',
-  67:'MP', 68:'DP', 69:'BMC', 70:'BDC', 71:'EMC', 72:'BX', 73:'EX',
-  74:'paintFormXObjectBegin', 75:'paintFormXObjectEnd',
-  76:'beginGroup', 77:'endGroup',
-  80:'beginAnnotation', 81:'endAnnotation',
-  83:'paintImageMaskXObject', 84:'paintImageMaskXObjectGroup',
-  85:'paintImageXObject', 86:'paintInlineImageXObject',
-  87:'paintInlineImageXObjectGroup', 88:'paintImageXObjectRepeat',
-  89:'paintImageMaskXObjectRepeat', 90:'paintSolidColorImageMask',
-  91:'constructPath', 92:'setStrokeTransparent', 93:'setFillTransparent'
+  2:'w', 3:'J', 4:'j', 5:'M', 6:'d', 7:'ri', 8:'i', 9:'gs',            // graphics state
+  10:'q', 11:'Q', 12:'cm',                                            // stack + transform
+  13:'m', 14:'l', 15:'c', 16:'v', 17:'y', 18:'h', 19:'re',             // path
+  20:'S', 21:'s', 22:'f', 23:'f*', 24:'B', 25:'B*', 26:'b', 27:'b*', 28:'n',  // path paint
+  29:'W', 30:'W*',                                                    // clip
+  31:'BT', 32:'ET',                                                    // text
+  33:'Tc', 34:'Tw', 35:'Tz', 36:'TL', 37:'Tf', 38:'Tr', 39:'Ts',        // text state
+  40:'Td', 41:'TD', 42:'Tm', 43:'T*', 44:'Tj', 45:'TJ', 46:"'", 47:'"',  // text pos + show
+  50:'CS', 51:'cs', 52:'SC', 53:'SCN', 54:'sc', 55:'scn',                // color space
+  56:'G', 57:'g', 58:'RG', 59:'rg', 60:'K', 61:'k',                      // color set
+  62:'sh', 66:'Do',                                                    // shading + xobject
+  69:'BMC', 70:'BDC', 71:'EMC', 72:'BX', 73:'EX'                        // marked content + compat
+  // 跳过：1(dependency)、63-65(BI/ID/EI inline image)、67-68(MP/DP)、74-93(pdf.js 内部)
 };
 
-// 转单个 arg 为 PDFObject（数字 → PDFNumber，字符串 → PDFHexString，其他转字符串）
+// 转单个 arg 为 PDFObject（保留 PDFRef、数组；字符串 → PDFHexString）
 function convertArg(arg, ctx){
   if(typeof arg === 'number') return pdfLibModule.PDFNumber.of(arg);
   if(typeof arg === 'string'){
     try{ return pdfLibModule.PDFHexString.fromText(arg); }
     catch(e){ return pdfLibModule.PDFString.of(arg); }
   }
-  // pdf.js 给出的 PDFRef 对象、glyph 对象（带 unicode）—— 都转成 JSON 字符串序列化兜底
-  if(arg && typeof arg === 'object'){
-    try{
-      const s = arg.unicode !== undefined ? String(arg.unicode) : String(arg);
-      return pdfLibModule.PDFHexString.fromText(s);
-    }catch(e){
-      return pdfLibModule.PDFString.of(String(arg));
-    }
+  // PDFRef 对象（pdf.js 用 objectNumber 标识）→ 直接传给 PDFOperator 引用
+  if(arg && typeof arg === 'object' && typeof arg.objectNumber === 'number'){
+    return arg;   // 直接返回 PDFRef
   }
-  return pdfLibModule.PDFString.of(String(arg));
+  // glyph 对象（pdf.js TJ/Tj 的 unicode 字段）→ 转 hex string
+  if(arg && typeof arg === 'object' && typeof arg.unicode === 'string'){
+    try{ return pdfLibModule.PDFHexString.fromText(arg.unicode); }
+    catch(e){ return pdfLibModule.PDFString.of(arg.unicode); }
+  }
+  // 数组（TJ 数组里混着的 kerning 数字 或 glyph 对象）
+  if(Array.isArray(arg)){
+    return arg.map(a => convertArg(a, ctx));
+  }
+  // 其他对象 → 转字符串兜底（极少数情况，不影响显示）
+  try{ return pdfLibModule.PDFString.of(String(arg)); }
+  catch(e){ return pdfLibModule.PDFString.of(''); }
 }
 
 // 把 pdf.js opList 的一项（fn + args）转成 PDFOperator
