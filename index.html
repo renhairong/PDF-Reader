@@ -2615,49 +2615,42 @@ function wmHit(tx, ty, fontSize, pageW, pageH, wmRects){
 }
 
 // 重建页面内容流：删除水印矩形内的 Tj 操作符
-// 内容流可能是 FlateDecode 压缩 → 先解压（DecompressionStream）→ 解析操作符 → 删除水印 Tj → 写回明文流
+// 安全策略：只处理单流 Contents（PDFArray 多流跳过，避免破坏文件结构）；写回压缩方式与原一致
 async function replacePageContents(pg, pageW, pageH, wmRects){
   const ctx = pg.doc.context;
-  const contents = pg.node.Contents();
-  // 收集所有内容流（可能多段），逐个解压为明文
-  const streams = [];
-  const collect = s => {
-    if(!s) return;
-    if(typeof s.getContents !== 'function') return;
-    const raw = s.getContents();   // Uint8Array（可能压缩）
-    // 检查是否 FlateDecode
-    let isFlate = false;
-    try{
-      const f = s.dict && s.dict.get(ctx.obj('Filter'));
-      isFlate = f && String(f).includes('FlateDecode');
-    }catch(e){}
-    if(isFlate){
-      // DecompressionStream 解压（deflate = zlib）
-      const ds = new DecompressionStream('deflate');
-      const readable = new Blob([raw]).stream().pipeThrough(ds);
-      return new Response(readable).arrayBuffer().then(buf => new TextDecoder().decode(buf));
-    }
-    return Promise.resolve(new TextDecoder().decode(raw));
-  };
-  const arr = [];
-  if(contents && typeof contents.size === 'function'){
-    for(let i = 0; i < contents.size(); i++){
-      try{ const r = ctx.lookup(contents.get(i)); if(r) arr.push(collect(r)); }catch(e){}
-    }
-  } else {
-    arr.push(collect(contents));
+  const oldContents = pg.node.Contents();
+  // 跳过多流 Contents（PDFArray 含多个流，独立处理易破坏）
+  if(oldContents && typeof oldContents.size === 'function' && oldContents.size() > 1){
+    console.warn('wm: skip multi-stream page', pg.ref);
+    return;
   }
-  const decoded = (await Promise.all(arr)).filter(Boolean);
-  if(!decoded.length) return;
-  const merged = decoded.join('\n');
-  const ops = buildOps(tokenizeContent(merged));
-  // 文本状态追踪
+  // 取单个流
+  const oldStream = oldContents && typeof oldContents.size === 'function'
+    ? ctx.lookup(oldContents.get(0)) : oldContents;
+  if(!oldStream || typeof oldStream.getContents !== 'function') return;
+  // 解压（如果是 FlateDecode）
+  const raw = oldStream.getContents();
+  let isFlate = false;
+  try{
+    const f = oldStream.dict && oldStream.dict.get(ctx.obj('Filter'));
+    isFlate = f && String(f).includes('FlateDecode');
+  }catch(e){}
+  let decoded;
+  if(isFlate){
+    const ds = new DecompressionStream('deflate');
+    const readable = new Blob([raw]).stream().pipeThrough(ds);
+    const buf = await new Response(readable).arrayBuffer();
+    decoded = new TextDecoder().decode(buf);
+  } else {
+    decoded = new TextDecoder().decode(raw);
+  }
+  // 解析 + 删除水印 Tj
+  const ops = buildOps(tokenizeContent(decoded));
   let tx = 0, ty = 0, fontSize = 12;
   let removed = 0;
   for(const op of ops){
     const name = op.name;
     if(name === 'Tf'){
-      // /F1 12 Tf → args = ['/F1', 12]，fontSize 是最后一个参数
       const v = op.args[op.args.length - 1];
       if(typeof v === 'number') fontSize = v;
     } else if(name === 'Tm'){
@@ -2674,11 +2667,8 @@ async function replacePageContents(pg, pageW, pageH, wmRects){
   }
   if(!removed) return;
   const newStr = serializeOps(ops.filter(o => !o.remove));
-  // 写回为明文流（不带 FlateDecode filter，避免再次压缩）
-  const bytes = new TextEncoder().encode(newStr);
-  const dict = ctx.obj({ Length: bytes.length });
-  const newStream = pdfLibModule.PDFRawStream.of(dict, bytes);
-  const newRef = ctx.register(newStream);
+  // 写回：保持原压缩方式（FlateDecode），让 Length/Filter 由 pdf-lib 自动处理
+  const newRef = ctx.register(ctx.flateStream(newStr));
   pg.node.set(ctx.obj('Contents'), newRef);
 }
 
