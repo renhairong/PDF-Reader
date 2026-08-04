@@ -2572,6 +2572,8 @@ function tokenizeContent(str){
       tokens.push({ type: 'name', value: s });
       continue;
     }
+    // token 总数限制（防止异常内容导致 Array.push 超限 → "Invalid array length"）
+    if(tokens.length > 100000) return null;
     let s = '';
     // 跳过 BI...EI（inline image 二进制块，tokenize 会因累积二进制导致超长）
     if(str.slice(i, i+2) === 'BI' && (str[i+2] === '\n' || str[i+2] === ' ' || str[i+2] === '\r')){
@@ -2591,13 +2593,14 @@ function tokenizeContent(str){
   return tokens;
 }
 
-// 解析 PDF 内容流（容错：失败返回 null → 调用方跳过该页）
+// 解析 PDF 内容流（容错：失败返回 null → 调用方跳过该页，不打印堆栈）
 function safeTokenizeContent(str){
-  try{ return tokenizeContent(str); }catch(e){ console.warn('tokenize err', e); return null; }
+  try{ return tokenizeContent(str); }catch(e){ console.warn('wm: page skipped,', e.message); return null; }
 }
 
-// token 列表 → 操作符列表 [{name, args}]
+// token 列表 → 操作符列表 [{name, args}]（null 入参返回 []）
 function buildOps(tokens){
+  if(!tokens) return [];
   const ops = [];
   const arrStack = [];
   let i = 0;
@@ -2689,9 +2692,13 @@ async function replacePageContents(pg, pageW, pageH, wmRects){
     decoded = new TextDecoder().decode(raw);
   }
   // 解析 + 删除水印 Tj
-  const ops = buildOps(safeTokenizeContent(decoded));
-  if(!ops){
+  const tokens = safeTokenizeContent(decoded);
+  if(!tokens){
     console.warn('wm: tokenize failed, skip page');
+    return;
+  }
+  const ops = buildOps(tokens);
+  if(!ops.length){
     return;
   }
   let tx = 0, ty = 0, fontSize = 12;
