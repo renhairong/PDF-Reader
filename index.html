@@ -2288,7 +2288,8 @@ async function detectWatermarks(){
         y: Math.max(0, rect.y - padY),
         w: rect.w + padX * 2,
         h: rect.h + padY * 2,
-        src: 'text'
+        src: 'text',
+        text: key   // ← 修复：保存水印文字，用于内容匹配
       });
     }
   }
@@ -2580,29 +2581,28 @@ function opListItemToOperator(fn, args, ctx){
 
 // 文字位置是否在水印矩形内
 // 水印判定（绕开坐标系问题：先文字内容匹配，bbox 兜底）
-// 1) 文字内容匹配：Tj/TJ 参数中的字符串包含已知水印文字 → 命中（最稳）
-// 2) bbox 检测：TJ 数组里只有数字 kerning 或坐标系不匹配 → 用 bbox 兜底
+// 1) 文字内容匹配：把 Tj/TJ/'/" 参数里的 unicode 全部收集，判断是否包含水印文字（精确/包含/拼接）
+// 2) bbox 检测：坐标系正确时兜底
 function isWatermarkOp(fn, args, tx, ty, fontSize, wmRects, wmStrings){
-  // 1. 文字内容匹配：把 args 里的字符串都拿出来比对
   if(wmStrings && wmStrings.length){
-    const strings = [];
+    // 收集此 op 内所有 unicode 字符
+    const unicodes = [];
+    const collect = (a) => {
+      if(typeof a === 'string') unicodes.push(a);
+      else if(a && typeof a === 'object' && typeof a.unicode === 'string') unicodes.push(a.unicode);
+    };
     if(fn === 44 || fn === 46 || fn === 47){  // Tj / ' / "
-      const a = args[0];
-      if(typeof a === 'string') strings.push(a);
-      else if(a && typeof a === 'object' && a.unicode) strings.push(a.unicode);
-    } else if(fn === 45){  // TJ：数组
+      collect(args[0]);
+    } else if(fn === 45){  // TJ：数组（glyph 对象或 kerning 数字）
       const a = args[0];
       const arr = Array.isArray(a) ? a : (a && Array.isArray(a.items) ? a.items : []);
-      for(const item of arr){
-        if(typeof item === 'string') strings.push(item);
-        else if(item && typeof item === 'object' && item.unicode) strings.push(item.unicode);
-      }
+      for(const item of arr) collect(item);
     }
-    for(const s of strings){
-      if(!s) continue;
-      for(const w of wmStrings){
-        if(s === w || s.includes(w)) return true;
-      }
+    const joined = unicodes.join('');
+    for(const w of wmStrings){
+      if(!w) continue;
+      // 精确匹配 / 包含匹配（处理分片：TJ 数组里只包含水印的一部分字符）
+      if(joined === w || joined.includes(w) || w.includes(joined)) return true;
     }
   }
   // 2. bbox 检测兜底
@@ -2639,13 +2639,8 @@ async function replacePageContents(pdfjsDoc, pageNum, wmRects, srcPdf, wmStrings
     } else if(fn === 43){ // nextLine T*
       ty -= fontSize * 1.15;
     } else if(fn === 44 || fn === 45 || fn === 46 || fn === 47){
-      // Tj/TJ/'/": 文字内容匹配 + bbox 兜底（绕开坐标系不匹配问题）
-      const hit = isWatermarkOp(fn, args, tx, ty, fontSize, wmRects, wmStrings);
-      if(pageNum === 1 && removed < 5 && !hit){
-        // 调试：看 args[0] 实际结构
-        console.log('text op', i, 'fn=', fn, 'args[0]=', JSON.stringify(args[0]).slice(0,200), '|wmStrings count:', wmStrings?.length, '|first wmStr:', JSON.stringify(wmStrings?.[0]));
-      }
-      if(hit){
+      // Tj/TJ/'/": 文字内容匹配 + bbox 兜底
+      if(isWatermarkOp(fn, args, tx, ty, fontSize, wmRects, wmStrings)){
         removed++;
         continue;
       }
