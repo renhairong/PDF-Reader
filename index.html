@@ -2567,7 +2567,9 @@ function blankXObjectWatermarks(srcPdf){
         // 关键：内容流需要 zlib 压缩（pdf-lib 内部用 pako 压缩 "q Q"，附 FlateDecode filter）
         const newStream = srcPdf.context.flateStream('q Q');
         stream.contents = newStream.contents;  // 压缩后的字节
-        stream.dict = newStream.dict;          // 完整的 dict（含 Filter: FlateDecode + Length）
+        // 保留原 dict 的 /Subtype /Form /Type /Resources /BBox，只更新 Length/Filter
+        stream.dict.set(srcPdf.context.obj('Length'), newStream.dict.get(srcPdf.context.obj('Length')));
+        stream.dict.set(srcPdf.context.obj('Filter'), newStream.dict.get(srcPdf.context.obj('Filter')));
         blanked++;
         dbg.push('  blanked '+nameStr+' (Form)');
       }catch(e){
