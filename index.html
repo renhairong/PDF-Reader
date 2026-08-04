@@ -2536,6 +2536,7 @@ function textToUTF16BEHex(s){
 // 这样所有引用该 XObject 的页面（包括 BDC/EMC 标记块和正文位置）都显示空白，无水印
 // 不动页面引用 / 状态 / 字体引用 → 不会破坏排版
 function blankXObjectWatermarks(srcPdf){
+  const ctx = srcPdf.context;   // 关键：拿到 pdf-lib context（用于 flateStream）
   const xobjRefs = new Set();
   let blanked = 0;
   const dbg = [];
@@ -2554,7 +2555,7 @@ function blankXObjectWatermarks(srcPdf){
         if(!stream) continue;
         const dict = stream.dict;
         if(!dict) continue;
-        const subtype = dict.get(srcPdf.context.obj('Subtype'));
+        const subtype = dict.get(ctx.obj('Subtype'));
         const subtypeStr = subtype ? String(subtype) : '';
         // 只清空 Form XObject（图片 XObject 的 Subtype 是 /Image，跳过）
         if(subtypeStr !== '/Form' && subtypeStr !== 'Form') continue;
@@ -2564,7 +2565,7 @@ function blankXObjectWatermarks(srcPdf){
         const isWatermarkXObj = /^(FX|WM|Watermark)/i.test(nameStr);
         if(!isWatermarkXObj) continue;
         // 关键：内容流需要 zlib 压缩（pdf-lib 内部用 pako 压缩 "q Q"，附 FlateDecode filter）
-        const newStream = ctx.flateStream('q Q');
+        const newStream = srcPdf.context.flateStream('q Q');
         stream.contents = newStream.contents;  // 压缩后的字节
         stream.dict = newStream.dict;          // 完整的 dict（含 Filter: FlateDecode + Length）
         blanked++;
@@ -2664,13 +2665,13 @@ async function stripWatermarkOnPage(pg, wmStrings, pageNum){
   if(totalRemoved === 0) return 0;
   const ctx = pg.doc.context;
   if(streams.length === 1){
-    const newStream = ctx.flateStream(streams[0].str);
+    const newStream = srcPdf.context.flateStream(streams[0].str);
     const newRef = ctx.register(newStream);
     pg.node.set(ctx.obj('Contents'), newRef);
   } else {
     // 多流：合并后写回单流（破坏最少）
     const merged = streams.map(s => s.str).join(' ');
-    const newStream = ctx.flateStream(merged);
+    const newStream = srcPdf.context.flateStream(merged);
     const newRef = ctx.register(newStream);
     pg.node.set(ctx.obj('Contents'), newRef);
   }
