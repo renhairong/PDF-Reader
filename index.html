@@ -2557,26 +2557,41 @@ const OPS_TO_PDF_NAME = {
   91:'constructPath', 92:'setStrokeTransparent', 93:'setFillTransparent'
 };
 
-// 转单个 arg 为 PDFObject（数字 → PDFNumber，字符串 → PDFHexString，PDFRef 保留）
+// 转单个 arg 为 PDFObject（数字 → PDFNumber，字符串 → PDFHexString，其他转字符串）
 function convertArg(arg, ctx){
   if(typeof arg === 'number') return pdfLibModule.PDFNumber.of(arg);
   if(typeof arg === 'string'){
-    // pdf.js opList 的字符串参数是已经解码的 Unicode
-    // 重建为 PDFHexString（UTF-16BE + BOM，与原始 PDF 内容流的 hex 字符串字面量兼容）
     try{ return pdfLibModule.PDFHexString.fromText(arg); }
     catch(e){ return pdfLibModule.PDFString.of(arg); }
   }
-  // PDFRef / 其他对象直接保留
-  if(arg && typeof arg === 'object' && typeof arg.objectNumber === 'number') return arg;
-  return arg;
+  // pdf.js 给出的 PDFRef 对象、glyph 对象（带 unicode）—— 都转成 JSON 字符串序列化兜底
+  if(arg && typeof arg === 'object'){
+    try{
+      const s = arg.unicode !== undefined ? String(arg.unicode) : String(arg);
+      return pdfLibModule.PDFHexString.fromText(s);
+    }catch(e){
+      return pdfLibModule.PDFString.of(String(arg));
+    }
+  }
+  return pdfLibModule.PDFString.of(String(arg));
 }
 
 // 把 pdf.js opList 的一项（fn + args）转成 PDFOperator
 function opListItemToOperator(fn, args, ctx){
   const name = OPS_TO_PDF_NAME[fn];
   if(!name) return null;
-  const pdfArgs = (args || []).map(a => convertArg(a, ctx));
-  return pdfLibModule.PDFOperator.of(name, pdfArgs);
+  const arr = Array.isArray(args) ? args : [];
+  const pdfArgs = arr.map(a => {
+    try{ return convertArg(a, ctx); }
+    catch(e){
+      return pdfLibModule.PDFString.of('');
+    }
+  });
+  try{ return pdfLibModule.PDFOperator.of(name, pdfArgs); }
+  catch(e){
+    console.warn('wm: skip op', name, '(', e.message, ')');
+    return null;
+  }
 }
 
 // 文字位置是否在水印矩形内
@@ -2584,7 +2599,7 @@ function opListItemToOperator(fn, args, ctx){
 // 1) 文字内容匹配：把 Tj/TJ/'/" 参数里的 unicode 全部收集，判断是否包含水印文字（精确/包含/拼接）
 // 2) bbox 检测：坐标系正确时兜底
 function isWatermarkOp(fn, args, tx, ty, fontSize, wmRects, wmStrings){
-  if(wmStrings && wmStrings.length){
+  if(wmStrings && Array.isArray(wmStrings) && wmStrings.length){
     // 收集此 op 内所有 unicode 字符
     const unicodes = [];
     const collect = (a) => {
@@ -2621,9 +2636,14 @@ async function replacePageContents(pdfjsDoc, pageNum, wmRects, srcPdf, wmStrings
   // srcPdf: pdf-lib PDFDocument（用 .getPages() 数组，0-based）
   // wmStrings: 该页水印文字集合（用于内容匹配）
   const ctx = srcPdf.context;
-  const page = srcPdf.getPage(pageNum - 1);   // ← 修复：pdf-lib 页（0-based）
+  const page = srcPdf.getPage(pageNum - 1);
   const pdfjsPage = await pdfjsDoc.getPage(pageNum);
   const opList = await pdfjsPage.getOperatorList();
+  // 防御：某些 PDF opList 可能异常（fnArray 缺失）—— 跳过该页
+  if(!opList || !opList.fnArray || !opList.argsArray){
+    console.warn('wm: page', pageNum, 'opList invalid, skipping');
+    return 0;
+  }
   let tx = 0, ty = 0, fontSize = 12;
   let removed = 0;
   const pdfOps = [];
