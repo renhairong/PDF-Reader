@@ -2571,9 +2571,11 @@ function convertArg(arg, ctx){
     try{ return pdfLibModule.PDFHexString.fromText(arg.unicode); }
     catch(e){ return pdfLibModule.PDFString.of(arg.unicode); }
   }
-  // 数组（TJ 数组里混着的 kerning 数字 或 glyph 对象）
+  // 数组（TJ 数组里混着的 kerning 数字 或 glyph 对象）→ 关键：用 PDFArray 包装！
+  // （pdf-lib 内部序列化为内容流时调用 arg.charCodeAt，纯 JS 数组没有此方法）
   if(Array.isArray(arg)){
-    return arg.map(a => convertArg(a, ctx));
+    const items = arg.map(a => convertArg(a, ctx));   // 递归
+    return ctx.obj(items);   // ctx.obj([]) 自动返回 PDFArray 实例
   }
   // 其他对象 → 转字符串兜底（极少数情况，不影响显示）
   try{ return pdfLibModule.PDFString.of(String(arg)); }
