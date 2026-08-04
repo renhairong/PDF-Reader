@@ -2511,7 +2511,8 @@ async function buildWatermarkStrippedPdf(){
         h: r.h * height
       }));
       try{
-        const removed = await replacePageContents(pdfjsDoc, pageNum, wmRects, srcPdf);
+        const wmStrings = (wmWatermarks.byPage[pgStr] || []).filter(r => r.text).map(r => r.text);
+        const removed = await replacePageContents(pdfjsDoc, pageNum, wmRects, srcPdf, wmStrings);
         totalRemoved += removed;
       }catch(e){
         console.warn('wm: page', pgStr, 'strip failed:', e.message);
@@ -2578,15 +2579,36 @@ function opListItemToOperator(fn, args, ctx){
 }
 
 // 文字位置是否在水印矩形内
-// 字符 bounding box（PDF 左下原点）vs 水印矩形：任意重叠即视为水印 op
-// 字符宽 = fontSize * 1.2（估算，单个字符通常 < 字号）；高度 = fontSize * 1.2（包含 ascender/descender）
-function isTextInWatermark(tx, ty, fontSize, wmRects){
-  const charX0 = tx;
-  const charX1 = tx + fontSize * 1.2;
-  const charY0 = ty;
-  const charY1 = ty + fontSize * 1.2;
+// 水印判定（绕开坐标系问题：先文字内容匹配，bbox 兜底）
+// 1) 文字内容匹配：Tj/TJ 参数中的字符串包含已知水印文字 → 命中（最稳）
+// 2) bbox 检测：TJ 数组里只有数字 kerning 或坐标系不匹配 → 用 bbox 兜底
+function isWatermarkOp(fn, args, tx, ty, fontSize, wmRects, wmStrings){
+  // 1. 文字内容匹配：把 args 里的字符串都拿出来比对
+  if(wmStrings && wmStrings.length){
+    const strings = [];
+    if(fn === 44 || fn === 46 || fn === 47){  // Tj / ' / "
+      const a = args[0];
+      if(typeof a === 'string') strings.push(a);
+      else if(a && typeof a === 'object' && a.unicode) strings.push(a.unicode);
+    } else if(fn === 45){  // TJ：数组
+      const a = args[0];
+      const arr = Array.isArray(a) ? a : (a && Array.isArray(a.items) ? a.items : []);
+      for(const item of arr){
+        if(typeof item === 'string') strings.push(item);
+        else if(item && typeof item === 'object' && item.unicode) strings.push(item.unicode);
+      }
+    }
+    for(const s of strings){
+      if(!s) continue;
+      for(const w of wmStrings){
+        if(s === w || s.includes(w)) return true;
+      }
+    }
+  }
+  // 2. bbox 检测兜底
+  const charX0 = tx, charX1 = tx + fontSize * 1.2;
+  const charY0 = ty, charY1 = ty + fontSize * 1.2;
   for(const r of wmRects){
-    // bounding box 相交检测
     if(charX1 >= r.x && charX0 <= r.x + r.w &&
        charY1 >= r.y && charY0 <= r.y + r.h) return true;
   }
@@ -2594,21 +2616,16 @@ function isTextInWatermark(tx, ty, fontSize, wmRects){
 }
 
 // 基于 pdf.js opList 重建单页内容流（删除水印 op）
-async function replacePageContents(pdfjsDoc, pageNum, wmRects, srcPdf){
+async function replacePageContents(pdfjsDoc, pageNum, wmRects, srcPdf, wmStrings){
   // pdfjsDoc: pdf.js PDFDocumentProxy（用 .getPage()，1-based）
   // srcPdf: pdf-lib PDFDocument（用 .getPages() 数组，0-based）
+  // wmStrings: 该页水印文字集合（用于内容匹配）
   const ctx = srcPdf.context;
   const pdfjsPage = await pdfjsDoc.getPage(pageNum);
   const opList = await pdfjsPage.getOperatorList();
-  // 调试：第一页打印 wmRects 和前 5 个 text op 位置
-  if(pageNum === 1){
-    console.log('wmRects:', JSON.stringify(wmRects));
-    console.log('ops count:', opList.fnArray.length);
-  }
   let tx = 0, ty = 0, fontSize = 12;
   let removed = 0;
   const pdfOps = [];
-  let dbgTextCount = 0;
   for(let i = 0; i < opList.fnArray.length; i++){
     const fn = opList.fnArray[i];
     const args = opList.argsArray[i] || [];
@@ -2622,13 +2639,8 @@ async function replacePageContents(pdfjsDoc, pageNum, wmRects, srcPdf){
     } else if(fn === 43){ // nextLine T*
       ty -= fontSize * 1.15;
     } else if(fn === 44 || fn === 45 || fn === 46 || fn === 47){
-      // Tj/TJ/'/"：检查文字位置是否在水印矩形内
-      const hit = isTextInWatermark(tx, ty, fontSize, wmRects);
-      if(pageNum === 1 && dbgTextCount < 8){
-        console.log('text op', dbgTextCount, 'fn=', fn, 'args[0]=', JSON.stringify(String(args[0]).slice(0,30)), 'pos=(', tx.toFixed(2), ',', ty.toFixed(2), ') fontSize=', fontSize, 'hit=', hit);
-        dbgTextCount++;
-      }
-      if(hit){
+      // Tj/TJ/'/": 文字内容匹配 + bbox 兜底（绕开坐标系不匹配问题）
+      if(isWatermarkOp(fn, args, tx, ty, fontSize, wmRects, wmStrings)){
         removed++;
         continue;
       }
