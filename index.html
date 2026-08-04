@@ -2646,19 +2646,13 @@ async function stripWatermarkOnPage(pg, wmStrings, pageNum){
   }
   let totalRemoved = 0;
   for(const s of streams){
-    // 1. 先尝试删除 XObject Form 水印引用块（<<.../Subtype/Watermark...>> BDC ... EMC）
-    const r1 = stripXObjectRefWatermark(s.decoded);
-    let newStr = r1.str;
-    totalRemoved += r1.removed;
-    // 2. 再尝试删除水印字符串字面量（hex）
-    const r2 = stripWatermarkFromContent(newStr, wmStrings);
-    newStr = r2.str;
+    // 只删除水印字符串字面量（hex）
+    const r2 = stripWatermarkFromContent(s.decoded, wmStrings);
+    s.str = r2.str;
+    s.removed = r2.removed;
     totalRemoved += r2.removed;
-    s.str = newStr;
-    s.removed = r1.removed + r2.removed;
-    // 调试：每页只显示前 150 字符 + 移除数
     if(pageNum === 1){
-      console.log('wm page 1 r1=', r1.removed, 'r2=', r2.removed, 'len=', newStr.length);
+      console.log('wm page 1 string removed:', r2.removed, 'len:', r2.str.length);
     }
   }
   if(totalRemoved === 0) return 0;
