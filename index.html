@@ -2588,11 +2588,12 @@ function isTextInWatermark(tx, ty, fontSize, wmRects){
 }
 
 // 基于 pdf.js opList 重建单页内容流（删除水印 op）
-async function replacePageContents(pdfDoc, pageNum, wmRects){
-  const ctx = pdfDoc.context;
-  const page = pdfDoc.getPage(pageNum - 1);
+async function replacePageContents(pdfjsDoc, pageNum, wmRects, srcPdf){
+  // pdfjsDoc: pdf.js PDFDocumentProxy（用 .getPage()，1-based）
+  // srcPdf: pdf-lib PDFDocument（用 .getPages() 数组，0-based）
+  const ctx = srcPdf.context;
   // 用 pdf.js 拿 operatorList（worker 已处理 BI/ID/EI/inline image 等所有边界情况）
-  const pdfjsPage = await pdfDoc.pdfjsDoc.getPage(pageNum);
+  const pdfjsPage = await pdfjsDoc.getPage(pageNum);
   const opList = await pdfjsPage.getOperatorList();
   // 跟踪文字状态（PDF 左下原点，点坐标）
   let tx = 0, ty = 0, fontSize = 12;
