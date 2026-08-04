@@ -2390,12 +2390,34 @@ async function renderWmPreview(){
       box.style.height = (r.h * wmCanvas.height) + 'px';
       wmBoxes.appendChild(box);
     }
-    // 预览水印效果：默认显示识别框；取消勾选 → 白色覆盖模拟删除后效果
+    // 预览水印效果：默认显示识别框；取消勾选 → 模拟删除（水印文字区域涂抹为背景采样色，接近真实删除效果）
     if(!wmPreview.checked){
       wmBoxes.style.display = 'none';
+      const imgData = ctx2d.getImageData(0, 0, wmCanvas.width, wmCanvas.height);
+      const px = imgData.data;
       for(const r of rects){
-        ctx2d.fillStyle = '#ffffff';
-        ctx2d.fillRect(r.x * wmCanvas.width, r.y * wmCanvas.height, r.w * wmCanvas.width, r.h * wmCanvas.height);
+        // 采样水印矩形上/下一行的像素众数作为背景色（避开文字本身）
+        const x0 = Math.max(0, Math.floor(r.x * wmCanvas.width));
+        const x1 = Math.min(wmCanvas.width - 1, Math.ceil((r.x + r.w) * wmCanvas.width));
+        const yTop = Math.max(0, Math.floor(r.y * wmCanvas.height) - 2);
+        const yBot = Math.min(wmCanvas.height - 1, Math.ceil((r.y + r.h) * wmCanvas.height) + 2);
+        const yMid = Math.floor((r.y + r.h / 2) * wmCanvas.height);
+        const counts = {};
+        let best = '#ffffff', bestN = 0;
+        const sample = [];
+        for(let xx = x0; xx <= x1; xx += 2){
+          sample.push([xx, yTop], [xx, yBot], [xx, yMid]);
+        }
+        for(const [sx, sy] of sample){
+          if(sy < 0 || sy >= wmCanvas.height) continue;
+          const idx = (sy * wmCanvas.width + sx) * 4;
+          const key = px[idx] + ',' + px[idx+1] + ',' + px[idx+2];
+          counts[key] = (counts[key] || 0) + 1;
+          if(counts[key] > bestN){ bestN = counts[key]; best = key; }
+        }
+        const [br, bg, bb] = best.split(',').map(Number);
+        ctx2d.fillStyle = `rgb(${br},${bg},${bb})`;
+        ctx2d.fillRect(x0, Math.floor(r.y * wmCanvas.height), x1 - x0 + 1, Math.ceil(r.h * wmCanvas.height));
       }
     } else {
       wmBoxes.style.display = '';
@@ -2421,8 +2443,9 @@ wmPgLast.onclick  = () => wmSetPage(pdfDoc.numPages);
 wmPgInput.addEventListener('keydown', e => { if(e.key === 'Enter') wmSetPage(parseInt(wmPgInput.value) || 1); });
 
 // ── 删除水印 → 生成修改版 PDF ──
+// 方案 B：真正从内容流删除水印文字（Tj 操作符），背景完整保留（水印打在图片上也能删文字）
 async function buildWatermarkStrippedPdf(){
-  const { PDFDocument, rgb } = await loadPdfLibModule();
+  const { PDFDocument } = await loadPdfLibModule();
   const srcPdf = await PDFDocument.load(pdfRawData.slice(0));
   const pages = srcPdf.getPages();
   const ctx = srcPdf.context;
@@ -2443,22 +2466,220 @@ async function buildWatermarkStrippedPdf(){
     }
     for(let j = toRemove.length - 1; j >= 0; j--) annots.remove(toRemove[j]);
   }
-  // 2. 覆盖内容流文字水印（白矩形）
+  // 2. 内容流文字水印：解析操作符 → 删除水印矩形内的 Tj → 重建内容流
   if(wmWatermarks){
     for(const pgStr in wmWatermarks.byPage){
       const pi = parseInt(pgStr) - 1;
       if(pi < 0 || pi >= pages.length) continue;
       const pg = pages[pi];
       const { width, height } = pg.getSize();
-      for(const r of wmWatermarks.byPage[pgStr]){
-        if(r.src === 'annotation') continue;  // 注释已删除，无需覆盖
-        const x = r.x * width;
-        const y = (1 - r.y - r.h) * height;
-        pg.drawRectangle({ x, y, width: r.w * width, height: r.h * height, color: rgb(1, 1, 1) });
+      const rects = wmWatermarks.byPage[pgStr].filter(r => r.src !== 'annotation');
+      if(!rects.length) continue;
+      // 归一化（左上原点）→ PDF 点坐标（左下原点）
+      const wmRects = rects.map(r => ({
+        x: r.x * width,
+        y: (1 - r.y - r.h) * height,
+        w: r.w * width,
+        h: r.h * height
+      }));
+      try{
+        await replacePageContents(pg, width, height, wmRects);
+      }catch(e){
+        console.warn('wm content strip failed on page', pgStr, e);
       }
     }
   }
   return await srcPdf.save();
+}
+
+// 解析 PDF 内容流为 token 列表
+function tokenizeContent(str){
+  const tokens = [];
+  let i = 0;
+  const n = str.length;
+  while(i < n){
+    const c = str[i];
+    if(/\s/.test(c)){ i++; continue; }
+    if(c === '%'){ while(i < n && str[i] !== '\n') i++; continue; }
+    if(c === '('){
+      let s = ''; i++;
+      while(i < n){
+        if(str[i] === '\\'){
+          const nxt = str[i+1];
+          if(nxt === 'n') s += '\n';
+          else if(nxt === 'r') s += '\r';
+          else if(nxt === 't') s += '\t';
+          else if(nxt === 'b') s += '\b';
+          else if(nxt === 'f') s += '\f';
+          else if(nxt === '(') s += '(';
+          else if(nxt === ')') s += ')';
+          else if(nxt === '\\') s += '\\';
+          else if(nxt >= '0' && nxt <= '7'){
+            let oct = nxt; i++;
+            while(i < n && str[i] >= '0' && str[i] <= '7' && oct.length < 3){ oct += str[i]; i++; }
+            s += String.fromCharCode(parseInt(oct, 8));
+            i++; continue;
+          } else if(nxt === '\n'){ i++; }
+          else { s += nxt; i++; }
+          i++;
+        } else if(str[i] === ')'){ i++; break; }
+        else { s += str[i]; i++; }
+      }
+      tokens.push({ type: 'str', value: s });
+      continue;
+    }
+    if(c === '<'){
+      if(str[i+1] === '<'){ i += 2; tokens.push({ type: 'dictStart' }); continue; }
+      let s = ''; i++;
+      while(i < n && str[i] !== '>'){ if(!/\s/.test(str[i])) s += str[i]; i++; }
+      if(str[i] === '>') i++;
+      tokens.push({ type: 'hex', value: s });
+      continue;
+    }
+    if(c === '['){ tokens.push({ type: 'arrStart' }); i++; continue; }
+    if(c === ']'){ tokens.push({ type: 'arrEnd' }); i++; continue; }
+    if(c === '/'){
+      let s = ''; i++;
+      while(i < n && !/[\s()<>\[\]{}/%]/.test(str[i])){ s += str[i]; i++; }
+      tokens.push({ type: 'name', value: s });
+      continue;
+    }
+    let s = '';
+    while(i < n && !/[\s()<>\[\]{}/%]/.test(str[i])){ s += str[i]; i++; }
+    if(/^-?\d/.test(s)) tokens.push({ type: 'num', value: parseFloat(s) });
+    else tokens.push({ type: 'op', value: s });
+  }
+  return tokens;
+}
+
+// token 列表 → 操作符列表 [{name, args}]
+function buildOps(tokens){
+  const ops = [];
+  const arrStack = [];
+  let i = 0;
+  while(i < tokens.length){
+    const t = tokens[i];
+    if(t.type === 'arrStart'){ arrStack.push([]); i++; continue; }
+    if(t.type === 'arrEnd'){
+      const arr = arrStack.pop() || [];
+      if(arrStack.length) arrStack[arrStack.length - 1].push({ type: 'arr', items: arr });
+      i++; continue;
+    }
+    if(t.type === 'dictStart'){ i++; continue; }
+    const args = [];
+    while(i < tokens.length && tokens[i].type !== 'op'){
+      const tt = tokens[i];
+      if(tt.type === 'num') args.push(tt.value);
+      else if(tt.type === 'str') args.push(tt.value);
+      else if(tt.type === 'hex') args.push({ type: 'hex', value: tt.value });
+      else if(tt.type === 'name') args.push('/' + tt.value);
+      else if(tt.type === 'arr') args.push(tt);
+      i++;
+    }
+    if(i < tokens.length){ ops.push({ name: tokens[i].value, args }); i++; }
+    else break;
+  }
+  return ops;
+}
+
+// 操作符列表 → 内容流字符串
+function serializeOps(ops){
+  let out = '';
+  for(const op of ops){
+    for(const a of op.args){
+      if(typeof a === 'number') out += a + ' ';
+      else if(typeof a === 'string') out += a + ' ';
+      else if(a && a.type === 'hex') out += '<' + a.value + '> ';
+      else if(a && a.type === 'arr'){
+        out += '[' + a.items.map(x => {
+          if(typeof x === 'number') return x;
+          if(x && x.type === 'hex') return '<' + x.value + '>';
+          return '(' + x + ')';
+        }).join(' ') + '] ';
+      }
+    }
+    out += op.name + '\n';
+  }
+  return out;
+}
+
+// 判断某 Tj 位置是否落在水印矩形内（页面点坐标，左下原点；容差 3pt + 字符高度）
+function wmHit(tx, ty, fontSize, pageW, pageH, wmRects){
+  const tol = 3;
+  const cx = tx, cy = ty + fontSize / 2;
+  for(const r of wmRects){
+    if(cx >= r.x - tol && cx <= r.x + r.w + tol &&
+       cy >= r.y - tol && cy <= r.y + r.h + tol) return true;
+  }
+  return false;
+}
+
+// 重建页面内容流：删除水印矩形内的 Tj 操作符
+// 内容流可能是 FlateDecode 压缩 → 先解压（DecompressionStream）→ 解析操作符 → 删除水印 Tj → 写回明文流
+async function replacePageContents(pg, pageW, pageH, wmRects){
+  const ctx = pg.doc.context;
+  const contents = pg.node.Contents();
+  // 收集所有内容流（可能多段），逐个解压为明文
+  const streams = [];
+  const collect = s => {
+    if(!s) return;
+    if(typeof s.getContents !== 'function') return;
+    const raw = s.getContents();   // Uint8Array（可能压缩）
+    // 检查是否 FlateDecode
+    let isFlate = false;
+    try{
+      const f = s.dict && s.dict.get(ctx.obj('Filter'));
+      isFlate = f && String(f).includes('FlateDecode');
+    }catch(e){}
+    if(isFlate){
+      // DecompressionStream 解压（deflate = zlib）
+      const ds = new DecompressionStream('deflate');
+      const readable = new Blob([raw]).stream().pipeThrough(ds);
+      return new Response(readable).arrayBuffer().then(buf => new TextDecoder().decode(buf));
+    }
+    return Promise.resolve(new TextDecoder().decode(raw));
+  };
+  const arr = [];
+  if(contents && typeof contents.size === 'function'){
+    for(let i = 0; i < contents.size(); i++){
+      try{ const r = ctx.lookup(contents.get(i)); if(r) arr.push(collect(r)); }catch(e){}
+    }
+  } else {
+    arr.push(collect(contents));
+  }
+  const decoded = (await Promise.all(arr)).filter(Boolean);
+  if(!decoded.length) return;
+  const merged = decoded.join('\n');
+  const ops = buildOps(tokenizeContent(merged));
+  // 文本状态追踪
+  let tx = 0, ty = 0, fontSize = 12;
+  let removed = 0;
+  for(const op of ops){
+    const name = op.name;
+    if(name === 'Tf'){
+      // /F1 12 Tf → args = ['/F1', 12]，fontSize 是最后一个参数
+      const v = op.args[op.args.length - 1];
+      if(typeof v === 'number') fontSize = v;
+    } else if(name === 'Tm'){
+      if(op.args.length >= 6){ tx = op.args[4]; ty = op.args[5]; }
+    } else if(name === 'Td' || name === 'TD'){
+      if(op.args.length >= 2){ tx += op.args[0]; ty += op.args[1]; }
+    } else if(name === 'T*'){
+      ty -= fontSize * 1.15;
+    } else if(name === 'Tj'){
+      if(wmHit(tx, ty, fontSize, pageW, pageH, wmRects)){ op.remove = true; removed++; }
+    } else if(name === 'TJ'){
+      if(wmHit(tx, ty, fontSize, pageW, pageH, wmRects)){ op.remove = true; removed++; }
+    }
+  }
+  if(!removed) return;
+  const newStr = serializeOps(ops.filter(o => !o.remove));
+  // 写回为明文流（不带 FlateDecode filter，避免再次压缩）
+  const bytes = new TextEncoder().encode(newStr);
+  const dict = ctx.obj({ Length: bytes.length });
+  const newStream = pdfLibModule.PDFRawStream.of(dict, bytes);
+  const newRef = ctx.register(newStream);
+  pg.node.set(ctx.obj('Contents'), newRef);
 }
 
 // 删除按钮
