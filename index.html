@@ -1863,10 +1863,10 @@ async function initPdf(bytes, name, options = {}){
   // 确定 fileId：historyId 优先；否则同步调 addToRecentList（确保写入的 id 与列表里一致）
   if(options.historyId){
     lastFileId = options.historyId;
-  } else {
+  } else if(!options.skipSaveRecent){
     const { id, removed } = addToRecentList(name);
     lastFileId = id;
-    // 异步清理被截断的记录 + 存文件数据（不阻塞 initPdf）
+    // 异步清理被截断的记录 + 存文件数据（原始字节，供"恢复原始文件"使用，不阻塞 initPdf）
     Promise.resolve().then(async () => {
       for(const r of removed){
         await deleteFileData(r.id);
@@ -1876,6 +1876,10 @@ async function initPdf(bytes, name, options = {}){
       await saveFileData(id, bytes);
       renderRecentFiles(getRecentList());
     });
+  } else {
+    // skipSaveRecent（如去水印刷新）：仅复用现有 id，不写最近列表、不覆盖 files store 的原始字节
+    const existingEntry = getRecentList().find(i => i.name === (name || '未命名.pdf'));
+    lastFileId = existingEntry ? existingEntry.id : (Date.now().toString(36) + Math.random().toString(36).slice(2,6));
   }
   // 预加载批注缓存
   loadAnnotationsCache(lastFileId).then(() => setTimeout(renderAllAnnotations, 0));
