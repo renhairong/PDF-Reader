@@ -2522,63 +2522,56 @@ function textToUTF16BEHex(s){
   return hex;
 }
 
-// 删除内容流里水印相关的两件事：
-// 1) XObject Form 引用块（BDC...EMC，含 << /Subtype/Watermark >>）→ 删除整块引用（页面不显示水印，但保留 XObject 定义本身）
-// 2) 字符串字面量（hex/literal）→ 兜底删除
+// 删除 XObject Form 水印引用块：<<...Subtype/Watermark...>> BDC ... EMC
+// 用平衡匹配（支持 BDC/EMC 嵌套）
 function stripXObjectRefWatermark(contentStr){
-  // 找所有 << ... /Subtype /Watermark ... >> BDC ... EMC 块
-  // 用平衡计数器（支持嵌套）
   let removed = 0;
   const result = [];
   let i = 0;
   while(i < contentStr.length){
-    // 找 << 起点
     const bdcIdx = contentStr.indexOf('<<', i);
     if(bdcIdx < 0){
       result.push(contentStr.slice(i));
       break;
     }
-    // 看这个 << 后是否含 /Subtype /Watermark（在 BDC 前）
+    // 找最近的 >>（不跨过 BDC）：限定在 BDC 之前
+    const nextBdc = contentStr.indexOf('BDC', bdcIdx);
+    const searchEnd = nextBdc >= 0 ? nextBdc : contentStr.length;
     const dictEnd = contentStr.indexOf('>>', bdcIdx + 2);
-    if(dictEnd < 0){
-      result.push(contentStr.slice(i));
-      break;
-    }
-    const dict = contentStr.slice(bdcIdx, dictEnd + 2);
-    if(!/\/Subtype\s*\/Watermark/i.test(dict)){
-      // 不是水印 dict，原样输出 << 之前
+    if(dictEnd < 0 || dictEnd > searchEnd){
       result.push(contentStr.slice(i, bdcIdx + 2));
       i = bdcIdx + 2;
       continue;
     }
-    // 是水印 dict：找到配套的 BDC...EMC 块
-    // 找 BDC（在 dictEnd 之后）
-    const bdcSearchFrom = dictEnd + 2;
-    const bdcPos = contentStr.indexOf('BDC', bdcSearchFrom);
+    const dict = contentStr.slice(bdcIdx, dictEnd + 2);
+    if(!new RegExp('/Subtype\\s*/Watermark\\b', 'i').test(dict)){
+      result.push(contentStr.slice(i, bdcIdx + 2));
+      i = bdcIdx + 2;
+      continue;
+    }
+    // 是水印 dict → 找配套的 BDC...EMC
+    const bdcPos = contentStr.indexOf('BDC', dictEnd + 2);
     if(bdcPos < 0){
       result.push(contentStr.slice(i));
       break;
     }
-    // 找平衡的 EMC（从 BDC 后开始计数 BDC/EMC）
     let depth = 1;
     let pos = bdcPos + 3;
     while(depth > 0 && pos < contentStr.length){
-      const nextBdc = contentStr.indexOf('BDC', pos);
-      const nextEmc = contentStr.indexOf('EMC', pos);
-      if(nextEmc < 0){
-        // 没找到对应 EMC——放弃修改
+      const nb = contentStr.indexOf('BDC', pos);
+      const ne = contentStr.indexOf('EMC', pos);
+      if(ne < 0){
         result.push(contentStr.slice(i));
         i = contentStr.length;
         break;
       }
-      if(nextBdc >= 0 && nextBdc < nextEmc){
+      if(nb >= 0 && nb < ne){
         depth++;
-        pos = nextBdc + 3;
+        pos = nb + 3;
       } else {
         depth--;
-        pos = nextEmc + 3;
+        pos = ne + 3;
         if(depth === 0){
-          // 找到了配套 EMC：删除从 dictStart 到 pos 的所有内容
           result.push(contentStr.slice(i, bdcIdx));
           i = pos;
           removed++;
@@ -2586,10 +2579,7 @@ function stripXObjectRefWatermark(contentStr){
         }
       }
     }
-    if(depth !== 0){
-      // 异常：未平衡，跳出
-      break;
-    }
+    if(depth !== 0) break;
   }
   return {str: result.join(''), removed};
 }
@@ -2678,6 +2668,10 @@ async function stripWatermarkOnPage(pg, wmStrings, pageNum){
     totalRemoved += r2.removed;
     s.str = newStr;
     s.removed = r1.removed + r2.removed;
+    if(pageNum === 1){
+      console.log('wm page 1 stripXObjectRefWatermark removed:', r1.removed, 'stripWatermarkFromContent removed:', r2.removed);
+      console.log('wm page 1 new content sample:', newStr.slice(0, 200));
+    }
   }
   if(totalRemoved === 0) return 0;
   const ctx = pg.doc.context;
