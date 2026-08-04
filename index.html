@@ -610,6 +610,13 @@
     background:var(--bar);color:var(--ink);border:1px solid var(--line);
   }
   .wm-retry:hover{background:var(--line)}
+  .wm-restore{
+    flex:0 0 auto;padding:12px 16px;
+    background:var(--bar);color:#c0392b;border:1px solid #e0b4b0;
+  }
+  .wm-restore:hover{background:#f7e8e6}
+  .dark .wm-restore{color:#e57373;border-color:#4a2c2a}
+  .dark .wm-restore:hover{background:#3a2828}
   .wm-mini-spin{
     width:16px;height:16px;border:2px solid rgba(255,255,255,.4);
     border-top-color:#fff;border-radius:50%;display:none;animation:piSpin .8s linear infinite;
@@ -869,6 +876,7 @@
       </div>
     </div>
     <div class="wm-footer">
+      <button class="wm-btn wm-restore" id="wmRestoreBtn" style="display:none">恢复原始文件</button>
       <button class="wm-btn wm-retry" id="wmRetryBtn" style="display:none">重试</button>
       <button class="wm-btn wm-del" id="wmDelBtn">
         <span class="wm-mini-spin"></span>
@@ -1051,7 +1059,7 @@ function saveRecentList(list){
 // IndexedDB：存储文件数据（用于重新打开）
 function openDB(){
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open('PDFReaderData', 2);
+    const req = indexedDB.open('PDFReaderData', 3);
     req.onupgradeneeded = () => {
       if(!req.result.objectStoreNames.contains('files')){
         req.result.createObjectStore('files', { keyPath: 'id' });
@@ -1060,6 +1068,10 @@ function openDB(){
         const as = req.result.createObjectStore('annotations', { keyPath: 'id' });
         as.createIndex('fileId', 'fileId', { unique: false });
         as.createIndex('filePage', ['fileId', 'pageNum'], { unique: false });
+      }
+      // 去水印缓存：按 fileId 存去水印版字节，重新打开时优先加载（源文件不改动）
+      if(!req.result.objectStoreNames.contains('wmCache')){
+        req.result.createObjectStore('wmCache', { keyPath: 'id' });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -1090,6 +1102,76 @@ async function deleteFileData(id){
     const db = await openDB();
     const tx = db.transaction('files', 'readwrite');
     tx.objectStore('files').delete(id);
+    await new Promise(r => { tx.oncomplete = r; });
+    db.close();
+  } catch(e){}
+}
+
+// ── 去水印缓存 (IndexedDB wmCache store, key = fileId) ──
+// 去水印成功后存去水印版字节，重新打开同一文件时优先加载 → 水印不显示，源文件不改动
+const MAX_WM_CACHE = 10;   // 上限：与最近打开文件数一致，超出按时间淘汰最旧
+async function saveWmCache(id, data, originalSize){
+  try {
+    const db = await openDB();
+    const tx = db.transaction('wmCache', 'readwrite');
+    tx.objectStore('wmCache').put({ id, data, time: Date.now(), originalSize: originalSize || 0 });
+    await new Promise(r => { tx.oncomplete = r; });
+    db.close();
+    // 写入后立即 readback 验证（用新 connection 模拟"重启后读取"）
+    const verify = await getWmCache(id);
+    if(!verify || !verify.data){
+      console.warn('wm: saveWmCache write verify FAILED, id=', id, 'verify=', verify);
+      return false;
+    }
+    if(verify.data.byteLength !== data.byteLength){
+      console.warn('wm: saveWmCache size mismatch, wrote=', data.byteLength, 'read=', verify.data.byteLength);
+      return false;
+    }
+    console.log('wm: saveWmCache OK, id=', id, 'size=', data.byteLength);
+    // LRU：缓存数超上限时删除最旧的（按 time）
+    const all = await getAllWmCache();
+    if(all.length > MAX_WM_CACHE){
+      all.sort((a, b) => (a.time || 0) - (b.time || 0));
+      const over = all.slice(0, all.length - MAX_WM_CACHE);
+      const db2 = await openDB();
+      const tx2 = db2.transaction('wmCache', 'readwrite');
+      for(const r of over) tx2.objectStore('wmCache').delete(r.id);
+      await new Promise(r => { tx2.oncomplete = r; });
+      db2.close();
+    }
+    return true;
+  } catch(e){
+    console.warn('wm: saveWmCache failed:', e?.message || e);
+    return false;
+  }
+}
+async function getWmCache(id){
+  try {
+    const db = await openDB();
+    const rec = await new Promise((resolve) => {
+      const req = db.transaction('wmCache').objectStore('wmCache').get(id);
+      req.onsuccess = () => { db.close(); resolve(req.result || null); };
+      req.onerror = () => { db.close(); resolve(null); };
+    });
+    return rec || null;   // { id, data, time, originalSize }
+  } catch(e){ return null; }
+}
+async function getAllWmCache(){
+  try {
+    const db = await openDB();
+    const all = await new Promise((resolve) => {
+      const req = db.transaction('wmCache').objectStore('wmCache').getAll();
+      req.onsuccess = () => { db.close(); resolve(req.result || []); };
+      req.onerror = () => { db.close(); resolve([]); };
+    });
+    return all;
+  } catch(e){ return []; }
+}
+async function deleteWmCache(id){
+  try {
+    const db = await openDB();
+    const tx = db.transaction('wmCache', 'readwrite');
+    tx.objectStore('wmCache').delete(id);
     await new Promise(r => { tx.oncomplete = r; });
     db.close();
   } catch(e){}
@@ -1492,10 +1574,13 @@ function scheduleCleanup(list){
 }
 
 // 保存最近打开记录
-async function saveRecentFile(name, data){
+// 同步部分：复用/生成 id + 更新 localStorage 列表 + 截断到 MAX_RECENT
+// 异步部分：存 IndexedDB + 清理被截断的记录
+// 拆分原因：initPdf 同步需要 id 来赋值 lastFileId，否则 saveWmCache 写入的 id 与列表里的 id 不一致
+function addToRecentList(name){
   const list = getRecentList();
   const finalName = name || '未命名.pdf';
-  // 同名文件：复用现有记录，移到首位 + 更新时间，避免重复条目
+  // 同名文件：复用现有 id，移到首位 + 更新时间
   const existingIdx = list.findIndex(i => i.name === finalName);
   let id;
   if(existingIdx >= 0){
@@ -1507,15 +1592,23 @@ async function saveRecentFile(name, data){
     id = Date.now().toString(36) + Math.random().toString(36).slice(2,6);
     list.unshift({ id, name: finalName, time: Date.now() });
   }
-  // 截断到 MAX_RECENT 条，多余的删除 IndexedDB 数据
+  // 截断到 MAX_RECENT 条
   const removed = list.splice(MAX_RECENT);
   saveRecentList(list);
+  return { id, removed };
+}
+async function saveRecentFile(name, data){
+  const { id, removed } = addToRecentList(name);
+  // 删除被截断的 IndexedDB 记录（连带去水印缓存 + 批注）
+  for(const r of removed){
+    await deleteFileData(r.id);
+    await deleteWmCache(r.id);
+    await deleteAnnotationsByFile(r.id);
+  }
   // 存文件数据到 IndexedDB（大文件可能失败）
   await saveFileData(id, data);
-  // 删除超出的 IndexedDB 记录
-  for(const r of removed) await deleteFileData(r.id);
   // 刷新列表显示
-  renderRecentFiles(list);
+  renderRecentFiles(getRecentList());
 }
 
 // 点击最近文件重新打开 / 删除
@@ -1531,6 +1624,7 @@ recentFilesEl.addEventListener('click', async (e) => {
     if(updated.length === list.length) return; // 没找到
     saveRecentList(updated);
     await deleteFileData(id);
+    await deleteWmCache(id);   // 连带删除去水印缓存
     renderRecentFiles(updated);
     return;
   }
@@ -1706,7 +1800,21 @@ async function loadFile(file, options = {}){
   showLoading();
   try{
     const sourceData = await file.arrayBuffer();
-    const historyData = sourceData.slice(0);
+    // 有去水印缓存 → 优先加载去水印版，水印不显示（源文件不改动）
+    // 匹配方式：historyId（最近列表点击）优先；否则按文件名匹配最近记录（文件选择器/拖拽打开也能命中）
+    // 校验 originalSize：同名但不同内容的文件（大小不同）不误用缓存
+    let historyData = sourceData.slice(0);
+    let cacheId = options.historyId;
+    if(!cacheId){
+      const entry = getRecentList().find(i => i.name === (file.name || '未命名.pdf'));
+      if(entry) cacheId = entry.id;
+    }
+    if(cacheId){
+      const wmRec = await getWmCache(cacheId);
+      if(wmRec && wmRec.data && (!wmRec.originalSize || wmRec.originalSize === sourceData.byteLength)){
+        historyData = wmRec.data.slice(0);
+      }
+    }
     pdfRawData = historyData;
     await initPdf(historyData, file.name || '', options);
   }catch(err){
@@ -1752,12 +1860,22 @@ async function initPdf(bytes, name, options = {}){
   updateZoomLabel();
   updatePageInfo();
   lastFileName = name;
-  // 确定 fileId
+  // 确定 fileId：historyId 优先；否则同步调 addToRecentList（确保写入的 id 与列表里一致）
   if(options.historyId){
     lastFileId = options.historyId;
   } else {
-    const existingEntry = getRecentList().find(i => i.name === (name || '未命名.pdf'));
-    lastFileId = existingEntry ? existingEntry.id : (Date.now().toString(36) + Math.random().toString(36).slice(2,6));
+    const { id, removed } = addToRecentList(name);
+    lastFileId = id;
+    // 异步清理被截断的记录 + 存文件数据（不阻塞 initPdf）
+    Promise.resolve().then(async () => {
+      for(const r of removed){
+        await deleteFileData(r.id);
+        await deleteWmCache(r.id);
+        await deleteAnnotationsByFile(r.id);
+      }
+      await saveFileData(id, bytes);
+      renderRecentFiles(getRecentList());
+    });
   }
   // 预加载批注缓存
   loadAnnotationsCache(lastFileId).then(() => setTimeout(renderAllAnnotations, 0));
@@ -1765,7 +1883,8 @@ async function initPdf(bytes, name, options = {}){
   importAnnotationsFromPdf();
   document.title = name || '云轩 PDF 阅读器 · 网页版';
   loadOutline();
-  // 保存到最近打开
+  // historyId 路径：把记录移到首位 + 刷新显示（不重新生成 id）
+  // 非 historyId 路径：id 已在上面 addToRecentList 同步生成 + 异步存储
   if(options.historyId){
     const list = getRecentList();
     const idx = list.findIndex(i => i.id === options.historyId);
@@ -1776,8 +1895,6 @@ async function initPdf(bytes, name, options = {}){
       saveRecentList(list);
       renderRecentFiles(list);
     }
-  } else if(!options.skipSaveRecent){
-    saveRecentFile(name || '未命名.pdf', bytes);
   }
   const prog = checkProgress(lastFileName);
   if(prog && prog.page > 1 && !options.skipProgress){
@@ -2156,11 +2273,13 @@ const wmProgressText = document.getElementById('wmProgressText');
 const wmDelBtn    = document.getElementById('wmDelBtn');
 const wmDelLabel  = document.getElementById('wmDelLabel');
 const wmRetryBtn  = document.getElementById('wmRetryBtn');
+const wmRestoreBtn = document.getElementById('wmRestoreBtn');
 
 let wmWatermarks = null;    // { byPage: {pageNum: [rect...]}, count, annotationCount, textCount }
 let wmRecognized = false;   // 识别完成
 let wmState = 'idle';       // idle | detecting | detected | empty | processing | done | error
 let wmFailStage = '';       // detect | process —— 重试按钮按此分发
+let wmHasCache = false;     // 当前文件是否有去水印缓存（empty/done 状态显示"恢复原始文件"）
 
 // 打开弹框：立即进入检测状态
 wmBtn.addEventListener('click', () => {
@@ -2178,6 +2297,8 @@ function setWmUi(state){
   wmStatus.classList.toggle('show', ['detected','empty','done','error'].includes(state));
   wmProgress.classList.toggle('show', state === 'processing');
   wmRetryBtn.style.display = (state === 'error') ? '' : 'none';
+  // 恢复原始文件：处理完成（done）或已缓存但检测不到（empty）时显示
+  wmRestoreBtn.style.display = (state === 'done' || (state === 'empty' && wmHasCache)) ? '' : 'none';
   const processing = state === 'processing';
   wmDelBtn.disabled = (state === 'detecting' || processing);
   wmDelBtn.classList.toggle('loading', processing);
@@ -2198,8 +2319,12 @@ async function runWatermarkDetect(){
     wmWatermarks = res;
     wmRecognized = true;
     if(res.count === 0){
+      // 检测不到水印：若该文件已有去水印缓存 → 提示可恢复原始文件
+      wmHasCache = !!(lastFileId && await getWmCache(lastFileId));
       wmResult.className = 'wm-result ok';
-      wmResultText.textContent = '✓ 未检测到水印，文件很干净';
+      wmResultText.textContent = wmHasCache
+        ? '✓ 此文件已去除水印（本地缓存），可恢复原始文件'
+        : '✓ 未检测到水印，文件很干净';
       setWmUi('empty');
     } else {
       renderWmTypes(res);
@@ -2236,6 +2361,7 @@ function closeWmModal(){
   wmWatermarks = null;
   wmRecognized = false;
   wmFailStage = '';
+  wmHasCache = false;
   wmDetectToken++;                       // 使进行中的检测失效
   wmProgressFill.style.width = '0%';
   wmSummary.innerHTML = '';
@@ -2695,6 +2821,22 @@ wmRetryBtn.addEventListener('click', () => {
   if(wmFailStage === 'detect') runWatermarkDetect();
   else if(wmFailStage === 'process') runWatermarkStrip();
 });
+// 恢复原始文件：删除 wmCache → 用 IndexedDB 里的原始字节重新加载（水印回来）
+wmRestoreBtn.addEventListener('click', async () => {
+  if(!lastFileId || wmState === 'processing') return;
+  const data = await getFileData(lastFileId);
+  if(!data){
+    await deleteWmCache(lastFileId);
+    wmHasCache = false;
+    showError('原始文件数据已丢失，请重新选择文件');
+    closeWmModal();
+    return;
+  }
+  await deleteWmCache(lastFileId);
+  wmHasCache = false;
+  const file = new File([data], lastFileName || 'document.pdf', { type: 'application/pdf' });
+  loadFile(file, { historyId: lastFileId });   // loadFile 内部会关闭弹框 + 显示 loading
+});
 
 async function runWatermarkStrip(){
   if(!wmRecognized || !wmWatermarks || wmState === 'processing') return;
@@ -2702,12 +2844,18 @@ async function runWatermarkStrip(){
   wmProgressFill.style.width = '0%';
   wmProgressText.textContent = '处理中 0%';
   try{
+    const origSize = pdfRawData.byteLength;   // 替换前的原始文件大小（用于缓存同名校验）
     const pdfBytes = await buildWatermarkStrippedPdf(pct => {
       wmProgressFill.style.width = pct + '%';
       wmProgressText.textContent = '处理中 ' + pct + '%';
     });
     // 替换内存中的源字节（不修改磁盘原文件）
     pdfRawData = pdfBytes.slice(0);
+    // 缓存去水印版（按 fileId）→ 重新打开同一文件时水印不显示
+    wmHasCache = false;
+    if(lastFileId){
+      wmHasCache = await saveWmCache(lastFileId, pdfRawData, origSize);
+    }
     // 关键：刷新 pdf.js viewer（canvas 是不可变的，必须重新加载才能看到新数据）
     showLoading();
     await initPdf(pdfRawData, lastFileName, { skipSaveRecent: true, skipProgress: true });
@@ -2914,6 +3062,7 @@ modalConfirm.addEventListener('click', async () => {
   const list = getRecentList();
   for(const item of list){
     await deleteFileData(item.id);
+    await deleteWmCache(item.id);   // 连带删除去水印缓存
     await deleteAnnotationsByFile(item.id);
   }
   saveRecentList([]);
