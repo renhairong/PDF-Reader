@@ -2621,6 +2621,7 @@ async function replacePageContents(pdfjsDoc, pageNum, wmRects, srcPdf, wmStrings
   // srcPdf: pdf-lib PDFDocument（用 .getPages() 数组，0-based）
   // wmStrings: 该页水印文字集合（用于内容匹配）
   const ctx = srcPdf.context;
+  const page = srcPdf.getPage(pageNum - 1);   // ← 修复：pdf-lib 页（0-based）
   const pdfjsPage = await pdfjsDoc.getPage(pageNum);
   const opList = await pdfjsPage.getOperatorList();
   let tx = 0, ty = 0, fontSize = 12;
