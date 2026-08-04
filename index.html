@@ -604,6 +604,12 @@
     border-top-color:#fff;border-radius:50%;display:none;animation:piSpin .8s linear infinite;
   }
   .wm-del.loading .wm-mini-spin{display:block}
+  .wm-dl{
+    width:100%;padding:11px;border:1px solid var(--brand);border-radius:9px;
+    background:var(--panel);color:var(--brand);font-size:14px;font-weight:600;cursor:pointer;
+    margin-top:8px;transition:all .12s;
+  }
+  .wm-dl:hover{background:var(--brand);color:#fff}
 
   /* settings dropdown menu */
   #settingsMenu{
@@ -873,7 +879,10 @@
     <div class="wm-footer">
       <button class="wm-del" id="wmDelBtn">
         <span class="wm-mini-spin"></span>
-        <span id="wmDelLabel">删除水印</span>
+        <span id="wmDelLabel">处理水印</span>
+      </button>
+      <button class="wm-dl" id="wmDlBtn" style="display:none">
+        <span id="wmDlLabel">下载去水印版</span>
       </button>
     </div>
   </div>
@@ -2188,6 +2197,13 @@ function closeWmModal(){
   wmOverlay.classList.remove('show');
   wmWatermarks = null;
   wmRecognized = false;
+  wmStrippedBytes = null;
+  wmDlBtn.style.display = 'none';
+  wmDelBtn.disabled = true;
+  wmDelBtn.classList.remove('loading');
+  wmDelLabel.textContent = '处理水印';
+  wmResult.classList.remove('ok', 'err');
+  wmResultText.textContent = '识别中…';
 }
 wmClose.addEventListener('click', closeWmModal);
 wmOverlay.addEventListener('click', e => { if(e.target === wmOverlay) closeWmModal(); });
@@ -2558,11 +2574,27 @@ function tokenizeContent(str){
       continue;
     }
     let s = '';
-    while(i < n && !/[\s()<>\[\]{}/%]/.test(str[i])){ s += str[i]; i++; }
+    // 跳过 BI...EI（inline image 二进制块，tokenize 会因累积二进制导致超长）
+    if(str.slice(i, i+2) === 'BI' && (str[i+2] === '\n' || str[i+2] === ' ' || str[i+2] === '\r')){
+      const eiIdx = str.indexOf('\nEI', i);
+      if(eiIdx < 0 || eiIdx > i + 100000) return null;   // 找不到 EI 或太大 → 解析失败
+      i = eiIdx + 3;
+      continue;
+    }
+    while(i < n && !/[\s()<>\[\]{}/%]/.test(str[i])){
+      s += str[i]; i++;
+      // 单个 token 长度限制（防止 BI 漏检或异常内容导致 OOM）
+      if(s.length > 4096) return null;
+    }
     if(/^-?\d/.test(s)) tokens.push({ type: 'num', value: parseFloat(s) });
     else tokens.push({ type: 'op', value: s });
   }
   return tokens;
+}
+
+// 解析 PDF 内容流（容错：失败返回 null → 调用方跳过该页）
+function safeTokenizeContent(str){
+  try{ return tokenizeContent(str); }catch(e){ console.warn('tokenize err', e); return null; }
 }
 
 // token 列表 → 操作符列表 [{name, args}]
@@ -2658,7 +2690,11 @@ async function replacePageContents(pg, pageW, pageH, wmRects){
     decoded = new TextDecoder().decode(raw);
   }
   // 解析 + 删除水印 Tj
-  const ops = buildOps(tokenizeContent(decoded));
+  const ops = buildOps(safeTokenizeContent(decoded));
+  if(!ops){
+    console.warn('wm: tokenize failed, skip page');
+    return;
+  }
   let tx = 0, ty = 0, fontSize = 12;
   let removed = 0;
   for(const op of ops){
@@ -2685,38 +2721,49 @@ async function replacePageContents(pg, pageW, pageH, wmRects){
   pg.node.set(ctx.obj('Contents'), newRef);
 }
 
-// 删除按钮
+// 处理水印（不自动下载）→ 存储到 IndexedDB → 弹框内显示"下载去水印版"按钮
+let wmStrippedBytes = null;   // 处理后的 PDF 字节
+let wmStrippedName = '';
+const wmDlBtn = document.getElementById('wmDlBtn');
 wmDelBtn.addEventListener('click', async () => {
   if(!wmRecognized || !wmWatermarks || wmDelBtn.classList.contains('loading')) return;
   wmDelBtn.classList.add('loading');
   wmDelBtn.disabled = true;
-  wmDelLabel.textContent = '正在删除水印…';
+  wmDelLabel.textContent = '正在处理水印…';
+  wmDlBtn.style.display = 'none';
   try{
     const pdfBytes = await buildWatermarkStrippedPdf();
-    const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-    const url = URL.createObjectURL(blob);
-    const name = (lastFileName || 'document.pdf').replace(/\.pdf$/i, '') + '_无水印.pdf';
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = name;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
-    // 存入最近打开（含处理后的字节）
-    try{ await saveRecentFile(name, new Uint8Array(pdfBytes)); }catch(e){}
+    wmStrippedBytes = pdfBytes;
+    wmStrippedName = (lastFileName || 'document.pdf').replace(/\.pdf$/i, '') + '_无水印.pdf';
+    // 存入最近打开（让用户从最近打开列表点开下载）
+    try{ await saveRecentFile(wmStrippedName, new Uint8Array(pdfBytes)); }catch(e){}
     wmResult.classList.add('ok');
-    wmResultText.textContent = `✅ 已删除 ${wmWatermarks.count} 处水印，文件已下载：${name}`;
-    wmDelLabel.textContent = '删除水印';
+    wmResultText.textContent = `✅ 已处理 ${wmWatermarks.count} 处水印，文件已保存到"最近打开"，可点击下方下载或从首页列表打开`;
+    wmDelLabel.textContent = '处理水印';
     wmDelBtn.classList.remove('loading');
-    setTimeout(closeWmModal, 1800);
+    wmDelBtn.disabled = true;   // 处理后禁用重处理
+    wmDlBtn.style.display = '';
   }catch(e){
     wmDelBtn.classList.remove('loading');
     wmDelBtn.disabled = false;
-    wmDelLabel.textContent = '删除水印';
+    wmDelLabel.textContent = '处理水印';
     wmResult.classList.add('err');
     wmResultText.textContent = '处理失败：' + (e?.message || e);
   }
+});
+
+// 下载去水印版（用户主动点击才下载）
+wmDlBtn.addEventListener('click', () => {
+  if(!wmStrippedBytes) return;
+  const blob = new Blob([wmStrippedBytes], { type: 'application/pdf' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = wmStrippedName || '去水印.pdf';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
 });
 
 // ── 搜索 ──
