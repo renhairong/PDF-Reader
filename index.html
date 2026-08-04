@@ -2516,7 +2516,7 @@ async function buildWatermarkStrippedPdf(){
         const removed = await replacePageContents(pdfjsDoc, pageNum, wmRects, srcPdf, wmStrings);
         totalRemoved += removed;
       }catch(e){
-        console.warn('wm: page', pgStr, 'strip failed:', e.message);
+        console.warn('wm: page', pgStr, 'strip failed:', e.message, '\n', e.stack);
       }
     }
     if(totalRemoved === 0){
