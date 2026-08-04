@@ -2473,7 +2473,7 @@ async function buildWatermarkStrippedPdf(){
     const srcPdf = await PDFDocument.load(pdfRawData.slice(0));
     const pages = srcPdf.getPages();
     const ctx = srcPdf.context;
-    // 1. 删除注释层水印
+    // 1. 删除注释层水印（FreeText/Text/Stamp/Square 注释）
     for(const pg of pages){
       const annots = pg.node.Annots();
       if(!annots) continue;
@@ -2486,18 +2486,23 @@ async function buildWatermarkStrippedPdf(){
         const sub = d.get(ctx.obj('Subtype'));
         if(!/FreeText|Text|Stamp|Square/.test(String(sub||''))) continue;
         const hay = [String(d.get(ctx.obj('Name'))||''), String(d.get(ctx.obj('T'))||''), String(d.get(ctx.obj('Contents'))||'')].join(' ').toLowerCase();
-        if(/watermark|\bwm\b|水印/.test(hay)) toRemove.push(j);
+        if(/watermark|\\bwm\\b|水印/.test(hay)) toRemove.push(j);
       }
       for(let j = toRemove.length - 1; j >= 0; j--) annots.remove(toRemove[j]);
     }
-    // 2. 内容流文字水印：解析操作符 → 删除水印矩形内的 Tj → 重建内容流
+    // 2. 内容流文字水印：用 pdf.js operatorList 重建（避免 BI/ID/EI/inline image 难题）
+    //    复用主 view 的 pdfDoc（已加载好的），不需要重新加载
+    const pdfjsDoc = pdfDoc;   // 主 view 的 pdf.js 文档（worker 已解析所有页面）
+    if(!pdfjsDoc){
+      throw new Error('pdf.js doc not available');
+    }
+    let totalRemoved = 0;
     for(const pgStr in wmWatermarks.byPage){
-      const pi = parseInt(pgStr) - 1;
-      if(pi < 0 || pi >= pages.length) continue;
-      const pg = pages[pi];
-      const { width, height } = pg.getSize();
+      const pageNum = parseInt(pgStr);
+      if(pageNum < 1 || pageNum > pages.length) continue;
       const rects = wmWatermarks.byPage[pgStr].filter(r => r.src !== 'annotation');
       if(!rects.length) continue;
+      const { width, height } = pages[pageNum - 1].getSize();
       // 归一化（左上原点）→ PDF 点坐标（左下原点）
       const wmRects = rects.map(r => ({
         x: r.x * width,
@@ -2506,232 +2511,121 @@ async function buildWatermarkStrippedPdf(){
         h: r.h * height
       }));
       try{
-        await replacePageContents(pg, width, height, wmRects);
+        const removed = await replacePageContents(pdfjsDoc, pageNum, wmRects, srcPdf);
+        totalRemoved += removed;
       }catch(e){
-        console.warn('wm content strip failed on page', pgStr, e);
+        console.warn('wm: page', pgStr, 'strip failed:', e.message);
       }
     }
+    if(totalRemoved === 0){
+      console.log('wm: no Tj/TJ op matched watermark rects, returning original');
+      return originalBytes;
+    }
     const newBytes = await srcPdf.save();
-    console.log('wm save OK, size:', newBytes.byteLength, '(orig:', originalBytes.byteLength, ')');
+    console.log('wm save OK, removed', totalRemoved, 'ops, size:', newBytes.byteLength, '(orig:', originalBytes.byteLength, ')');
     return newBytes;
   }catch(e){
-    console.warn('wm strip failed, fallback to original:', e);
+    console.warn('wm strip failed:', e.message);
     return originalBytes;
   }
 }
 
-// 解析 PDF 内容流为 token 列表
-function tokenizeContent(str){
-  const tokens = [];
-  let i = 0;
-  const n = str.length;
-  while(i < n){
-    const c = str[i];
-    if(/\s/.test(c)){ i++; continue; }
-    if(c === '%'){ while(i < n && str[i] !== '\n') i++; continue; }
-    if(c === '('){
-      let s = ''; i++;
-      while(i < n){
-        if(str[i] === '\\'){
-          const nxt = str[i+1];
-          if(nxt === 'n') s += '\n';
-          else if(nxt === 'r') s += '\r';
-          else if(nxt === 't') s += '\t';
-          else if(nxt === 'b') s += '\b';
-          else if(nxt === 'f') s += '\f';
-          else if(nxt === '(') s += '(';
-          else if(nxt === ')') s += ')';
-          else if(nxt === '\\') s += '\\';
-          else if(nxt >= '0' && nxt <= '7'){
-            let oct = nxt; i++;
-            while(i < n && str[i] >= '0' && str[i] <= '7' && oct.length < 3){ oct += str[i]; i++; }
-            s += String.fromCharCode(parseInt(oct, 8));
-            i++; continue;
-          } else if(nxt === '\n'){ i++; }
-          else { s += nxt; i++; }
-          i++;
-        } else if(str[i] === ')'){ i++; break; }
-        else { s += str[i]; i++; }
-      }
-      tokens.push({ type: 'str', value: s });
-      continue;
-    }
-    if(c === '<'){
-      if(str[i+1] === '<'){ i += 2; tokens.push({ type: 'dictStart' }); continue; }
-      let s = ''; i++;
-      while(i < n && str[i] !== '>'){ if(!/\s/.test(str[i])) s += str[i]; i++; }
-      if(str[i] === '>') i++;
-      tokens.push({ type: 'hex', value: s });
-      continue;
-    }
-    if(c === '['){ tokens.push({ type: 'arrStart' }); i++; continue; }
-    if(c === ']'){ tokens.push({ type: 'arrEnd' }); i++; continue; }
-    if(c === '/'){
-      let s = ''; i++;
-      while(i < n && !/[\s()<>\[\]{}/%]/.test(str[i])){ s += str[i]; i++; }
-      tokens.push({ type: 'name', value: s });
-      continue;
-    }
-    // token 总数限制（防止异常内容导致 Array.push 超限 → "Invalid array length"）
-    if(tokens.length > 100000) return null;
-    let s = '';
-    // 跳过 BI...EI（inline image 二进制块，tokenize 会因累积二进制导致超长）
-    // BI 后可以是 \n / 空格 / << 直接开始 dict（PDF 规范允许）
-    if(str.slice(i, i+2) === 'BI' && (str[i+2] === '\n' || str[i+2] === ' ' || str[i+2] === '\r' || str[i+2] === '<')){
-      // 找最近的 EI 标记（不要求前面 \n），验证后面是分隔符避免误匹配字符串内的 EI
-      const eiIdx = str.indexOf('EI', i + 2);
-      if(eiIdx < 0 || eiIdx > i + 500000) return null;
-      const after = str[eiIdx + 2];
-      if(!after || /[\s\n\r()\[\]<>/%]/.test(after)){
-        i = eiIdx + 2;
-        continue;
-      }
-      // EI 后不是分隔符 → 不是 op，跳过这个 BI，继续往下
-      // （BI 累积成普通 op）
-    }
-    while(i < n && !/[\s()<>\[\]{}/%]/.test(str[i])){
-      s += str[i]; i++;
-      // 单个 token 长度限制（防止 BI 漏检或异常内容导致 OOM）
-      if(s.length > 4096) return null;
-    }
-    if(/^-?\d/.test(s)) tokens.push({ type: 'num', value: parseFloat(s) });
-    else tokens.push({ type: 'op', value: s });
+
+// 基于 pdf.js operatorList 重建内容流：完全避开手写 tokenizer / BI/ID/EI / inline image 难题
+// pdf.js worker 已经把内容流解析成 opList（fnArray + argsArray），我们直接用它识别水印 op 并重建 PDFOperator 数组
+
+// pdf.js OPS 数字 → PDF 操作符名字
+const OPS_TO_PDF_NAME = {
+  1:'dependency', 2:'w', 3:'J', 4:'j', 5:'M', 6:'d', 7:'ri', 8:'i', 9:'gs',
+  10:'q', 11:'Q', 12:'cm', 13:'m', 14:'l', 15:'c', 16:'v', 17:'y', 18:'h', 19:'re',
+  20:'S', 21:'s', 22:'f', 23:'f*', 24:'B', 25:'B*', 26:'b', 27:'b*', 28:'n',
+  29:'W', 30:'W*', 31:'BT', 32:'ET', 33:'Tc', 34:'Tw', 35:'Tz', 36:'TL', 37:'Tf',
+  38:'Tr', 39:'Ts', 40:'Td', 41:'TD', 42:'Tm', 43:'T*', 44:'Tj', 45:'TJ',
+  46:"'", 47:'"', 48:'d0', 49:'d1',
+  50:'CS', 51:'cs', 52:'SC', 53:'SCN', 54:'sc', 55:'scn', 56:'G', 57:'g', 58:'RG', 59:'rg', 60:'K', 61:'k',
+  62:'sh', 63:'BI', 64:'ID', 65:'EI', 66:'Do',
+  67:'MP', 68:'DP', 69:'BMC', 70:'BDC', 71:'EMC', 72:'BX', 73:'EX',
+  74:'paintFormXObjectBegin', 75:'paintFormXObjectEnd',
+  76:'beginGroup', 77:'endGroup',
+  80:'beginAnnotation', 81:'endAnnotation',
+  83:'paintImageMaskXObject', 84:'paintImageMaskXObjectGroup',
+  85:'paintImageXObject', 86:'paintInlineImageXObject',
+  87:'paintInlineImageXObjectGroup', 88:'paintImageXObjectRepeat',
+  89:'paintImageMaskXObjectRepeat', 90:'paintSolidColorImageMask',
+  91:'constructPath', 92:'setStrokeTransparent', 93:'setFillTransparent'
+};
+
+// 转单个 arg 为 PDFObject（数字 → PDFNumber，字符串 → PDFHexString，PDFRef 保留）
+function convertArg(arg, ctx){
+  if(typeof arg === 'number') return pdfLibModule.PDFNumber.of(arg);
+  if(typeof arg === 'string'){
+    // pdf.js opList 的字符串参数是已经解码的 Unicode
+    // 重建为 PDFHexString（UTF-16BE + BOM，与原始 PDF 内容流的 hex 字符串字面量兼容）
+    try{ return pdfLibModule.PDFHexString.fromText(arg); }
+    catch(e){ return pdfLibModule.PDFString.of(arg); }
   }
-  return tokens;
+  // PDFRef / 其他对象直接保留
+  if(arg && typeof arg === 'object' && typeof arg.objectNumber === 'number') return arg;
+  return arg;
 }
 
-// 解析 PDF 内容流（容错：失败返回 null → 调用方跳过该页，不打印堆栈）
-function safeTokenizeContent(str){
-  try{ return tokenizeContent(str); }catch(e){ console.warn('wm: page skipped,', e.message); return null; }
+// 把 pdf.js opList 的一项（fn + args）转成 PDFOperator
+function opListItemToOperator(fn, args, ctx){
+  const name = OPS_TO_PDF_NAME[fn];
+  if(!name) return null;
+  const pdfArgs = (args || []).map(a => convertArg(a, ctx));
+  return pdfLibModule.PDFOperator.of(name, pdfArgs);
 }
 
-// token 列表 → 操作符列表 [{name, args}]（null 入参返回 []）
-function buildOps(tokens){
-  if(!tokens) return [];
-  const ops = [];
-  const arrStack = [];
-  let i = 0;
-  while(i < tokens.length){
-    const t = tokens[i];
-    if(t.type === 'arrStart'){ arrStack.push([]); i++; continue; }
-    if(t.type === 'arrEnd'){
-      const arr = arrStack.pop() || [];
-      if(arrStack.length) arrStack[arrStack.length - 1].push({ type: 'arr', items: arr });
-      i++; continue;
-    }
-    if(t.type === 'dictStart'){ i++; continue; }
-    const args = [];
-    while(i < tokens.length && tokens[i].type !== 'op'){
-      const tt = tokens[i];
-      if(tt.type === 'num') args.push(tt.value);
-      else if(tt.type === 'str') args.push(tt.value);
-      else if(tt.type === 'hex') args.push({ type: 'hex', value: tt.value });
-      else if(tt.type === 'name') args.push('/' + tt.value);
-      else if(tt.type === 'arr') args.push(tt);
-      i++;
-    }
-    if(i < tokens.length){ ops.push({ name: tokens[i].value, args }); i++; }
-    else break;
-  }
-  return ops;
-}
-
-// 操作符列表 → 内容流字符串
-function serializeOps(ops){
-  let out = '';
-  for(const op of ops){
-    for(const a of op.args){
-      if(typeof a === 'number') out += a + ' ';
-      else if(typeof a === 'string') out += a + ' ';
-      else if(a && a.type === 'hex') out += '<' + a.value + '> ';
-      else if(a && a.type === 'arr'){
-        out += '[' + a.items.map(x => {
-          if(typeof x === 'number') return x;
-          if(x && x.type === 'hex') return '<' + x.value + '>';
-          return '(' + x + ')';
-        }).join(' ') + '] ';
-      }
-    }
-    out += op.name + '\n';
-  }
-  return out;
-}
-
-// 判断某 Tj 位置是否落在水印矩形内（页面点坐标，左下原点；容差 3pt + 字符高度）
-function wmHit(tx, ty, fontSize, pageW, pageH, wmRects){
+// 文字位置是否在水印矩形内
+function isTextInWatermark(tx, ty, fontSize, wmRects){
   const tol = 3;
   const cx = tx, cy = ty + fontSize / 2;
   for(const r of wmRects){
-    if(cx >= r.x - tol && cx <= r.x + r.w + tol &&
-       cy >= r.y - tol && cy <= r.y + r.h + tol) return true;
+    if(cx >= r.x - tol && cx <= r.x + r.w + tol && cy >= r.y - tol && cy <= r.y + r.h + tol) return true;
   }
   return false;
 }
 
-// 重建页面内容流：删除水印矩形内的 Tj 操作符
-// 安全策略：只处理单流 Contents（PDFArray 多流跳过，避免破坏文件结构）；写回压缩方式与原一致
-async function replacePageContents(pg, pageW, pageH, wmRects){
-  const ctx = pg.doc.context;
-  const oldContents = pg.node.Contents();
-  // 跳过多流 Contents（PDFArray 含多个流，独立处理易破坏）
-  if(oldContents && typeof oldContents.size === 'function' && oldContents.size() > 1){
-    console.warn('wm: skip multi-stream page', pg.ref);
-    return;
-  }
-  // 取单个流
-  const oldStream = oldContents && typeof oldContents.size === 'function'
-    ? ctx.lookup(oldContents.get(0)) : oldContents;
-  if(!oldStream || typeof oldStream.getContents !== 'function') return;
-  // 解压（如果是 FlateDecode）
-  const raw = oldStream.getContents();
-  let isFlate = false;
-  try{
-    const f = oldStream.dict && oldStream.dict.get(ctx.obj('Filter'));
-    isFlate = f && String(f).includes('FlateDecode');
-  }catch(e){}
-  let decoded;
-  if(isFlate){
-    const ds = new DecompressionStream('deflate');
-    const readable = new Blob([raw]).stream().pipeThrough(ds);
-    const buf = await new Response(readable).arrayBuffer();
-    decoded = new TextDecoder().decode(buf);
-  } else {
-    decoded = new TextDecoder().decode(raw);
-  }
-  // 解析 + 删除水印 Tj
-  const tokens = safeTokenizeContent(decoded);
-  if(!tokens){
-    console.warn('wm: tokenize failed, skip page');
-    return;
-  }
-  const ops = buildOps(tokens);
-  if(!ops.length){
-    return;
-  }
+// 基于 pdf.js opList 重建单页内容流（删除水印 op）
+async function replacePageContents(pdfDoc, pageNum, wmRects){
+  const ctx = pdfDoc.context;
+  const page = pdfDoc.getPage(pageNum - 1);
+  // 用 pdf.js 拿 operatorList（worker 已处理 BI/ID/EI/inline image 等所有边界情况）
+  const pdfjsPage = await pdfDoc.pdfjsDoc.getPage(pageNum);
+  const opList = await pdfjsPage.getOperatorList();
+  // 跟踪文字状态（PDF 左下原点，点坐标）
   let tx = 0, ty = 0, fontSize = 12;
   let removed = 0;
-  for(const op of ops){
-    const name = op.name;
-    if(name === 'Tf'){
-      const v = op.args[op.args.length - 1];
-      if(typeof v === 'number') fontSize = v;
-    } else if(name === 'Tm'){
-      if(op.args.length >= 6){ tx = op.args[4]; ty = op.args[5]; }
-    } else if(name === 'Td' || name === 'TD'){
-      if(op.args.length >= 2){ tx += op.args[0]; ty += op.args[1]; }
-    } else if(name === 'T*'){
+  const pdfOps = [];
+  for(let i = 0; i < opList.fnArray.length; i++){
+    const fn = opList.fnArray[i];
+    const args = opList.argsArray[i] || [];
+    // 跟踪文字位置
+    if(fn === 37){ // setFont /Tf → args = [name, size]
+      if(typeof args[1] === 'number') fontSize = args[1];
+    } else if(fn === 42){ // setTextMatrix /Tm → args = [a,b,c,d,e,f]
+      if(args.length >= 6){ tx = args[4]; ty = args[5]; }
+    } else if(fn === 40 || fn === 41){ // moveText /Td /TD → args = [x,y]
+      if(args.length >= 2){ tx += args[0]; ty += args[1]; }
+    } else if(fn === 43){ // nextLine T*
       ty -= fontSize * 1.15;
-    } else if(name === 'Tj'){
-      if(wmHit(tx, ty, fontSize, pageW, pageH, wmRects)){ op.remove = true; removed++; }
-    } else if(name === 'TJ'){
-      if(wmHit(tx, ty, fontSize, pageW, pageH, wmRects)){ op.remove = true; removed++; }
+    } else if(fn === 44 || fn === 45 || fn === 46 || fn === 47){
+      // Tj/TJ/'/"：检查文字位置是否在水印矩形内
+      if(isTextInWatermark(tx, ty, fontSize, wmRects)){
+        removed++;
+        continue;   // 跳过这个 op
+      }
     }
+    const op = opListItemToOperator(fn, args, ctx);
+    if(op) pdfOps.push(op);
   }
-  if(!removed) return;
-  const newStr = serializeOps(ops.filter(o => !o.remove));
-  // 写回：保持原压缩方式（FlateDecode），让 Length/Filter 由 pdf-lib 自动处理
-  const newRef = ctx.register(ctx.flateStream(newStr));
-  pg.node.set(ctx.obj('Contents'), newRef);
+  if(!removed) return 0;
+  // 用 pdf-lib ctx.contentStream 创建新内容流（自动序列化 PDFOperator 数组 + FlateDecode 压缩）
+  const newStream = ctx.contentStream(pdfOps);
+  const newRef = ctx.register(newStream);
+  page.node.set(ctx.obj('Contents'), newRef);
+  return removed;
 }
 
 // 处理水印：在内存中替换当前 PDF 为去水印版 → 关闭弹框 → 用户直接看到去水印效果
