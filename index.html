@@ -2522,66 +2522,19 @@ function textToUTF16BEHex(s){
   return hex;
 }
 
-// 删除 XObject Form 水印引用块：<<...Subtype/Watermark...>> BDC ... EMC
-// 用平衡匹配（支持 BDC/EMC 嵌套）
+// 删除 XObject Form 水印引用块：用正则匹配完整的 `/Artifact <<...Subtype/Watermark...>> BDC ... EMC` 块
+// 避免 indexOf-based dict 匹配错误（之前保留 /Artifact 名字导致解析失败）
 function stripXObjectRefWatermark(contentStr){
+  // 匹配 `/Artifact << ... Subtype /Watermark ... >> BDC ... EMC`（跨多行、跨空白）
+  // 非贪婪 .*? 直到第一个 EMC
+  // 注意：MCID/Artifact 等 marked content tag 不一定是 /Artifact（可能是 /Span/P/...），但 Subtype /Watermark 是关键标志
+  const re = /\/[A-Za-z0-9_]+\s*<<[^<>]*\/Subtype\s*\/Watermark\b[^<>]*>>\s*BDC[\s\S]*?EMC/g;
   let removed = 0;
-  const result = [];
-  let i = 0;
-  while(i < contentStr.length){
-    const bdcIdx = contentStr.indexOf('<<', i);
-    if(bdcIdx < 0){
-      result.push(contentStr.slice(i));
-      break;
-    }
-    // 找最近的 >>（不跨过 BDC）：限定在 BDC 之前
-    const nextBdc = contentStr.indexOf('BDC', bdcIdx);
-    const searchEnd = nextBdc >= 0 ? nextBdc : contentStr.length;
-    const dictEnd = contentStr.indexOf('>>', bdcIdx + 2);
-    if(dictEnd < 0 || dictEnd > searchEnd){
-      result.push(contentStr.slice(i, bdcIdx + 2));
-      i = bdcIdx + 2;
-      continue;
-    }
-    const dict = contentStr.slice(bdcIdx, dictEnd + 2);
-    if(!new RegExp('/Subtype\\s*/Watermark\\b', 'i').test(dict)){
-      result.push(contentStr.slice(i, bdcIdx + 2));
-      i = bdcIdx + 2;
-      continue;
-    }
-    // 是水印 dict → 找配套的 BDC...EMC
-    const bdcPos = contentStr.indexOf('BDC', dictEnd + 2);
-    if(bdcPos < 0){
-      result.push(contentStr.slice(i));
-      break;
-    }
-    let depth = 1;
-    let pos = bdcPos + 3;
-    while(depth > 0 && pos < contentStr.length){
-      const nb = contentStr.indexOf('BDC', pos);
-      const ne = contentStr.indexOf('EMC', pos);
-      if(ne < 0){
-        result.push(contentStr.slice(i));
-        i = contentStr.length;
-        break;
-      }
-      if(nb >= 0 && nb < ne){
-        depth++;
-        pos = nb + 3;
-      } else {
-        depth--;
-        pos = ne + 3;
-        if(depth === 0){
-          result.push(contentStr.slice(i, bdcIdx));
-          i = pos;
-          removed++;
-          break;
-        }
-      }
-    }
-    if(depth !== 0) break;
-  }
-  return {str: result.join(''), removed};
+  const newStr = contentStr.replace(re, (match) => {
+    removed++;
+    return '';
+  });
+  return {str: newStr, removed};
 }
 
 // 删除水印字符串字面量（UTF-16BE hex 形式）
