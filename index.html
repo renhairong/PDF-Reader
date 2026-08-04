@@ -2640,7 +2640,12 @@ async function replacePageContents(pdfjsDoc, pageNum, wmRects, srcPdf, wmStrings
       ty -= fontSize * 1.15;
     } else if(fn === 44 || fn === 45 || fn === 46 || fn === 47){
       // Tj/TJ/'/": 文字内容匹配 + bbox 兜底（绕开坐标系不匹配问题）
-      if(isWatermarkOp(fn, args, tx, ty, fontSize, wmRects, wmStrings)){
+      const hit = isWatermarkOp(fn, args, tx, ty, fontSize, wmRects, wmStrings);
+      if(pageNum === 1 && removed < 5 && !hit){
+        // 调试：看 args[0] 实际结构
+        console.log('text op', i, 'fn=', fn, 'args[0]=', JSON.stringify(args[0]).slice(0,200), '|wmStrings count:', wmStrings?.length, '|first wmStr:', JSON.stringify(wmStrings?.[0]));
+      }
+      if(hit){
         removed++;
         continue;
       }
