@@ -525,29 +525,40 @@
   #wmOverlay.show{display:flex}
   .wm-modal{
     width:360px;max-width:94vw;
-    background:var(--bar);border:1px solid var(--line);border-radius:14px;
-    box-shadow:0 24px 80px rgba(0,0,0,.3);
-    animation:scaleIn .14s ease;
+    background:var(--bar);border:1px solid var(--line);border-radius:16px;
+    box-shadow:0 24px 80px rgba(0,0,0,.28);
+    animation:scaleIn .16s ease;
   }
   .wm-head{
     display:flex;align-items:center;justify-content:space-between;
-    padding:14px 18px;border-bottom:1px solid var(--line);
+    padding:16px 18px 12px;
   }
-  .wm-head h3{font-size:15px;font-weight:600;color:var(--ink)}
+  .wm-head h3{
+    font-size:14.5px;font-weight:600;color:var(--ink);
+    display:flex;align-items:center;gap:8px;
+  }
+  /* 标题左侧品牌图标（水滴+删除线） */
+  .wm-title-icon{
+    width:26px;height:26px;border-radius:8px;
+    background:rgba(31,136,61,.1);color:var(--brand);
+    display:flex;align-items:center;justify-content:center;
+  }
+  .dark .wm-title-icon{background:rgba(76,191,110,.14)}
   .wm-close{
-    width:26px;height:26px;border:none;border-radius:50%;
-    background:var(--line);color:var(--sub);cursor:pointer;font-size:13px;
-    display:flex;align-items:center;justify-content:center;transition:all .12s;
+    width:28px;height:28px;border:none;border-radius:50%;
+    background:transparent;color:var(--sub);cursor:pointer;font-size:14px;
+    display:flex;align-items:center;justify-content:center;transition:all .15s;
   }
-  .wm-close:hover{background:var(--sub);color:#fff}
+  .wm-close:hover{background:var(--line);color:var(--ink)}
   .wm-body{
-    padding:16px 18px;position:relative;min-height:110px;
+    padding:4px 18px 16px;position:relative;min-height:96px;
   }
   /* 检测中：覆盖内容区的遮罩 */
   .wm-loading{
     position:absolute;inset:0;z-index:5;
     background:rgba(255,255,255,.9);
     display:none;flex-direction:column;align-items:center;justify-content:center;gap:10px;
+    border-radius:16px;
   }
   .wm-loading.show{display:flex}
   .wm-spinner{
@@ -555,70 +566,79 @@
     border-top-color:var(--brand);border-radius:50%;animation:piSpin .8s linear infinite;
   }
   .wm-loading span{font-size:13px;color:var(--sub)}
-  .dark .wm-loading{background:rgba(28,28,32,.9)}
+  .dark .wm-loading{background:rgba(28,28,32,.92)}
   .dark .wm-loading span{color:#9a9aa0}
   /* 结果状态区 */
-  .wm-status{display:none;flex-direction:column;gap:10px}
+  .wm-status{display:none;flex-direction:column;gap:12px}
   .wm-status.show{display:flex}
   .wm-summary{font-size:14px;color:var(--ink)}
   .wm-summary:empty{display:none}
-  .wm-summary b{color:var(--brand)}
-  .wm-types{border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .wm-summary b{font-size:17px;font-weight:700;color:var(--brand);margin:0 2px}
+  .dark .wm-summary b{color:#4cbf6e}
+  /* 类型列表：无边框容器，仅顶部细分隔线；数字放大为视觉锚点 */
+  .wm-types{border-top:1px solid var(--line)}
   .wm-types:empty{display:none}
   .wm-type-row{
     display:flex;align-items:center;justify-content:space-between;
-    padding:8px 12px;font-size:13px;color:var(--ink);
+    padding:10px 2px;font-size:13px;color:var(--ink);
   }
   .wm-type-row + .wm-type-row{border-top:1px solid var(--line)}
-  .wm-type-name{font-weight:500}
-  .wm-type-count{font-weight:600;display:flex;align-items:center;gap:6px}
-  .wm-badge{
-    font-size:11px;font-weight:500;padding:1px 8px;border-radius:10px;
-    background:rgba(31,157,78,.12);color:#1f9d4e;white-space:nowrap;
-  }
-  .dark .wm-badge{background:rgba(76,191,110,.15);color:#4cbf6e}
+  .wm-type-name{color:var(--sub)}
+  .wm-type-count{font-size:22px;font-weight:600;color:var(--brand);line-height:1}
+  .wm-type-unit{font-size:11px;font-weight:500;color:var(--sub);margin-left:4px}
+  .dark .wm-type-count{color:#4cbf6e}
   .wm-note{font-size:11.5px;color:var(--sub)}
-  .wm-result{font-size:12.5px;color:var(--sub);line-height:1.5}
-  .wm-result.ok{color:#1f9d4e}
-  .wm-result.err{color:#c0392b}
-  .dark .wm-result.ok{color:#4cbf6e}
+  /* 状态提示条（alert-bar：左色块 + 淡底色） */
+  .wm-result{
+    font-size:12.5px;color:var(--sub);line-height:1.5;
+    border-left:3px solid var(--line);border-radius:6px;
+    background:rgba(134,134,139,.07);
+    padding:9px 12px;
+  }
+  /* wmResultText 为空时（如"检测到水印"状态）整条 alert-bar 隐藏，避免空条带 */
+  .wm-result:has(>#wmResultText:empty){display:none}
+  .wm-result.ok{color:#1f9d4e;border-left-color:#1f9d4e;background:rgba(31,157,78,.08)}
+  .wm-result.err{color:#c0392b;border-left-color:#c0392b;background:rgba(192,57,43,.07)}
+  .dark .wm-result{background:rgba(142,142,147,.1)}
+  .dark .wm-result.ok{color:#4cbf6e;background:rgba(76,191,110,.1)}
+  .dark .wm-result.err{color:#e57373;background:rgba(229,115,115,.12)}
   /* 进度条（处理中） */
   .wm-progress{display:none;flex-direction:column;gap:8px}
   .wm-progress.show{display:flex}
   .wm-progress-bar{
-    height:8px;border-radius:4px;background:var(--line);overflow:hidden;
+    height:6px;border-radius:3px;background:var(--line);overflow:hidden;
   }
   .wm-progress-fill{
-    height:100%;width:0%;border-radius:4px;
+    height:100%;width:0%;border-radius:3px;
     background:var(--brand);transition:width .25s ease;
   }
   .wm-progress-text{font-size:12px;color:var(--sub)}
   .wm-footer{
-    padding:14px 18px;border-top:1px solid var(--line);
-    display:flex;gap:10px;
+    padding:12px 18px;border-top:1px solid var(--line);
+    display:flex;gap:8px;
   }
   .wm-btn{
-    flex:1;padding:12px;border:none;border-radius:9px;
-    font-size:15px;font-weight:600;cursor:pointer;
-    display:flex;align-items:center;justify-content:center;gap:8px;transition:filter .12s;
+    flex:1;padding:8px 12px;border-radius:8px;
+    font-size:13px;font-weight:600;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;gap:6px;transition:all .15s;
   }
-  .wm-del{background:var(--brand);color:#fff}
-  .wm-del:hover:not(:disabled){filter:brightness(.92)}
-  .wm-del:disabled{opacity:.5;cursor:default}
+  .wm-del{background:var(--brand);color:#fff;border:1px solid var(--brand)}
+  .wm-del:hover:not(:disabled){background:var(--brand2)}
+  .wm-del:disabled{opacity:.45;cursor:default}
   .wm-retry{
-    flex:0 0 auto;padding:12px 20px;
-    background:var(--bar);color:var(--ink);border:1px solid var(--line);
+    flex:0 0 auto;padding:8px 16px;
+    background:transparent;color:var(--ink);border:1px solid var(--line);
   }
   .wm-retry:hover{background:var(--line)}
   .wm-restore{
-    flex:0 0 auto;padding:12px 16px;
-    background:var(--bar);color:#c0392b;border:1px solid #e0b4b0;
+    flex:0 0 auto;padding:8px 14px;
+    background:transparent;color:#c0392b;border:1px solid #e0b4b0;
   }
-  .wm-restore:hover{background:#f7e8e6}
+  .wm-restore:hover{background:rgba(192,57,43,.06);border-color:#c0392b}
   .dark .wm-restore{color:#e57373;border-color:#4a2c2a}
-  .dark .wm-restore:hover{background:#3a2828}
+  .dark .wm-restore:hover{background:rgba(229,115,115,.12);border-color:#e57373}
   .wm-mini-spin{
-    width:16px;height:16px;border:2px solid rgba(255,255,255,.4);
+    width:14px;height:14px;border:2px solid rgba(255,255,255,.4);
     border-top-color:#fff;border-radius:50%;display:none;animation:piSpin .8s linear infinite;
   }
   .wm-del.loading .wm-mini-spin{display:block}
@@ -856,7 +876,12 @@
 <div id="wmOverlay">
   <div class="wm-modal">
     <div class="wm-head">
-      <h3>🧹 去水印</h3>
+      <h3>
+        <span class="wm-title-icon">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </span>
+        去水印
+      </h3>
       <button class="wm-close" id="wmClose" title="关闭">✕</button>
     </div>
     <div class="wm-body">
@@ -2350,7 +2375,7 @@ async function runWatermarkDetect(){
 function renderWmTypes(res){
   wmResult.className = 'wm-result';
   wmResultText.textContent = '';
-  wmSummary.innerHTML = `检测到 <b>${res.count}</b> 处水印，可一键删除`;
+  // 类型行已显示数字，无需额外 summary 文案（避免重复 + 数字双重强调）
   const types = [
     { name: '文本水印（内容流）', n: res.textCount },
     { name: '注释水印', n: res.annotationCount }
@@ -2358,7 +2383,7 @@ function renderWmTypes(res){
   wmTypes.innerHTML = types.filter(t => t.n > 0).map(t => `
     <div class="wm-type-row">
       <span class="wm-type-name">${t.name}</span>
-      <span class="wm-type-count">${t.n} <span class="wm-badge">✓ 可删除</span></span>
+      <span class="wm-type-count">${t.n}<span class="wm-type-unit">处</span></span>
     </div>`).join('');
 }
 
