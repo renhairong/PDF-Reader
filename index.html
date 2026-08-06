@@ -1059,7 +1059,9 @@ function saveRecentList(list){
 // IndexedDB：存储文件数据（用于重新打开）
 function openDB(){
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open('PDFReaderData', 3);
+    // 版本号必须 ≥ 浏览器现有数据库版本（AI 精读测试曾把数据库升到 v4，浏览器单向升级不可回退；
+    // 若请求版本低于现有版本会抛 VersionError 导致全部 IndexedDB 数据读不到）
+    const req = indexedDB.open('PDFReaderData', 4);
     req.onupgradeneeded = () => {
       if(!req.result.objectStoreNames.contains('files')){
         req.result.createObjectStore('files', { keyPath: 'id' });
